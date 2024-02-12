@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Chat Client</title>
+</head>
+<body>
+
+<script>
+    const socket = new WebSocket("ws://127.0.0.1:8000"); // Replace with the actual server IP and port
+
+    socket.addEventListener("open", (event) => {
+        console.log("WebSocket connection opened:", event);
+
+        // Send a message to the server when the connection is established
+        socket.send("Hello, Server!");
+    });
+
+    socket.addEventListener("message", (event) => {
+        console.log("Received message:", event.data);
+
+        // Handle the received message, e.g., update the chat UI
+        appendMessage(event.data);
+    });
+
+    socket.addEventListener("close", (event) => {
+        console.log("WebSocket connection closed:", event);
+    });
+
+    // Function to send a message to the server
+    function sendMessage() {
+        const messageInput = document.getElementById("messageInput");
+        const message = messageInput.value;
+
+        // Send the message to the server
+        socket.send(message);
+
+        // Clear the input field
+        messageInput.value = "";
+    }
+
+    // Function to append a message to the chat area
+    function appendMessage(message) {
+        const chatArea = document.getElementById("chatArea");
+        const messageElement = document.createElement("div");
+        messageElement.textContent = message;
+        chatArea.appendChild(messageElement);
+    }
+</script>
+
+<div>
+    <div id="chatArea" style="border: 1px solid #ccc; padding: 10px; max-height: 200px; overflow-y: auto;"></div>
+    <input type="text" id="messageInput" placeholder="Type your message...">
+    <button onclick="sendMessage()">Send</button>
+</div>
+
+</body>
+</html>
