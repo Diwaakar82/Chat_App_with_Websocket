@@ -14,7 +14,7 @@
         console.log("WebSocket connection opened:", event);
 
         // Send a message to the server when the connection is established
-        socket.send("Hello, Server!");
+        //socket.send("Hello, Server!");
     });
 
     socket.addEventListener("message", (event) => {
@@ -26,6 +26,10 @@
 
     socket.addEventListener("close", (event) => {
         console.log("WebSocket connection closed:", event);
+    });
+
+    socket.addEventListener("error", (event) => {
+        console.error("WebSocket error:", event);
     });
 
     // Function to send a message to the server

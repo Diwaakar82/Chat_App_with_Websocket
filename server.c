@@ -28,27 +28,158 @@ pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
 struct client_details* client_list = NULL;
 
 // give IPV4 or IPV6  based on the family set in the sa
-void *get_in_addr(struct sockaddr *sa){
-	if(sa->sa_family == AF_INET){
-		return &(((struct sockaddr_in*)sa)->sin_addr);	
-	}
-	return &(((struct sockaddr_in6*)sa)->sin6_addr);
+void *get_in_addr (struct sockaddr *sa)
+{
+	if (sa -> sa_family == AF_INET)
+		return &(((struct sockaddr_in*) sa) -> sin_addr);	
+	
+	return &(((struct sockaddr_in6*) sa) -> sin6_addr);
 }
 
-void generate_random_mask(uint8_t *mask) {
-    srand(time(NULL));
+void generate_random_mask (uint8_t *mask) 
+{
+    srand (time (NULL));
 
     // Generate a random 32-bit mask
-    for (size_t i = 0; i < 4; ++i) {
-        mask[i] = rand() & 0xFF;
-    }
+    for (size_t i = 0; i < 4; ++i)
+        mask [i] = rand () & 0xFF;
 }
 
 // Function to mask payload data
-void mask_payload(uint8_t *payload, size_t payload_length, uint8_t *mask) {
-    for (size_t i = 0; i < payload_length; ++i) {
-        payload[i] ^= mask[i % 4];
+void mask_payload (uint8_t *payload, size_t payload_length, uint8_t *mask) 
+{
+    for (size_t i = 0; i < payload_length; ++i)
+        payload [i] ^= mask [i % 4];
+}
+
+void send_frame(const uint8_t *frame, size_t length,int connfd) {
+    ssize_t bytes_sent = send(connfd, frame, length, 0);
+    if (bytes_sent == -1) {
+        perror("Send failed");
+    } else {
+        printf("Pong Frame sent to client\n");
     }
+}
+
+void send_pong(const char *payload, size_t payload_length,int connfd) {
+    uint8_t pong_frame[128];
+    pong_frame[0] = 0xA;
+    pong_frame[1] = (uint8_t)payload_length;
+    memcpy(pong_frame + 2, payload, payload_length);
+    send_frame(pong_frame, payload_length + 2,connfd);
+}
+
+void handle_ping(const uint8_t *data, size_t length,int connfd) {
+    char ping_payload[126];
+    memcpy(ping_payload, data + 2, length - 2);
+    ping_payload[length - 2] = '\0';
+    send_pong(ping_payload, length - 2,connfd);
+}
+
+void handle_close(int connfd) {
+    struct client_details* head = client_list;
+    struct client_details* current = head;
+    struct client_details* prev = NULL;
+
+    while (current != NULL) 
+    {
+        if (connfd == current -> connfd)
+        {
+        	uint8_t close_frame[] = {0x88, 0x00};
+            send (connfd, close_frame, sizeof (close_frame), 0);
+            break;
+        }
+        prev = current;
+        current = current -> next;
+    }
+    
+    if(prev == NULL)	
+    	client_list = client_list -> next;
+    else
+    	prev -> next = prev -> next -> next;
+
+    pthread_exit(NULL);
+}
+
+// Function to decode the header of a WebSocket frame
+int decode_websocket_frame_header(
+    uint8_t *frame_buffer,
+    uint8_t *fin,
+    uint8_t *opcode,
+    uint8_t *mask,
+    uint64_t *payload_length
+) 
+{
+    // Extract header bytes and mask
+    *fin = (frame_buffer [0] >> 7) & 1;
+    *opcode = frame_buffer [0] & 0x0F;
+    *mask = (frame_buffer [1] >> 7) & 1;
+    int n = 0;
+    
+    // Calculate payload length based on header type
+    *payload_length = frame_buffer [1] & 0x7F;
+    if (*payload_length == 126) 
+    {
+        n = 1;
+        *payload_length = *(frame_buffer + 2);
+        *payload_length <<= 8;
+        *payload_length |= *(frame_buffer + 3);
+    } 
+    else if (*payload_length == 127) 
+    {
+        n = 2;
+        *payload_length = 0;
+        for (int i = 2; i < 10; ++i)
+            *payload_length = (*payload_length << 8) | *(frame_buffer + i);
+    }
+
+    return  (2 + (n == 1 ? 2 : (n == 2 ? 8 : 0)));
+}
+
+int process_websocket_frame(uint8_t *data, size_t length, char **decoded_data,int connfd) 
+{
+    uint8_t fin, opcode, mask;
+    uint64_t payload_length;
+    uint8_t* masking_key;
+
+    int header_size = decode_websocket_frame_header (data, &fin, &opcode, &mask, &payload_length);
+    if (header_size == -1) 
+    {
+        printf ("Error decoding WebSocket frame header\n");
+        return -1;
+    }
+    
+    if (mask)
+    {
+    	masking_key = header_size + data;
+    	header_size += 2;
+    }
+    header_size += 2;
+    
+    size_t payload_offset = header_size;
+    
+    
+    if (opcode == 0x9) 
+    {
+        handle_ping (data, length, connfd);
+        *decoded_data = NULL;
+        return 0;
+    } 
+    else if (opcode == 0x8) 
+    {
+    	printf ("closes the connection\n");
+        handle_close (connfd);
+    }
+
+    *decoded_data = (char *)malloc (payload_length + 1);
+    
+    if (mask)
+    	for (size_t i = 0; i < payload_length; ++i)
+	     (*decoded_data) [i] = data [payload_offset + i] ^ masking_key [i % 4];
+
+    (*decoded_data) [payload_length] = '\0';
+
+    return 0;
 }
 
 // Function to encode a complete WebSocket frame
@@ -113,41 +244,6 @@ int encode_websocket_frame (
     return header_size + payload_length; // Total frame size
 }
 
-// Function to decode the header of a WebSocket frame
-int decode_websocket_frame_header(
-    uint8_t *frame_buffer,
-    uint8_t *fin,
-    uint8_t *opcode,
-    uint8_t *mask,
-    uint64_t *payload_length
-) 
-{
-    // Extract header bytes and mask
-    *fin = (frame_buffer [0] >> 7) & 1;
-    *opcode = frame_buffer [0] & 0x0F;
-    *mask = (frame_buffer [1] >> 7) & 1;
-    int n = 0;
-    
-    // Calculate payload length based on header type
-    *payload_length = frame_buffer [1] & 0x7F;
-    if (*payload_length == 126) 
-    {
-        n = 1;
-        *payload_length = *(frame_buffer + 2);
-        *payload_length <<= 8;
-        *payload_length |= *(frame_buffer + 3);
-    } 
-    else if (*payload_length == 127) 
-    {
-        n = 2;
-        *payload_length = 0;
-        for (int i = 2; i < 10; ++i)
-            *payload_length = (*payload_length << 8) | *(frame_buffer + i);
-    }
-
-    return  (2 + (n == 1 ? 2 : (n == 2 ? 8 : 0)));
-}
-
 // Function to send WebSocket frame to the client
 int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *payload) 
 {
@@ -159,11 +255,11 @@ int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *
     ssize_t bytes_sent = send (client_socket, encoded_data, encoded_size, 0);
     if (bytes_sent == -1) 
     {
-        perror("Send failed");
+        perror ("Send failed");
         return -1;
     }
 
-    printf ("Message sent to client\n");
+    printf ("Message sent to client: %d, %s\n", client_socket, payload);
 
     return 0;
 }
@@ -189,7 +285,7 @@ void remove_client (int connfd)
 
     while (current != NULL) 
     {
-        if (current->connfd == connfd) 
+        if (current -> connfd == connfd) 
         {
             if (prev == NULL)
                 client_list = current -> next;
@@ -209,7 +305,7 @@ void remove_client (int connfd)
 
 void* handle_client (void* arg) 
 {
-    int connfd = *((int*)arg);
+    int connfd = *((int*) arg);
     struct client_details* new_client = (struct client_details*) malloc (sizeof (struct client_details));
     new_client -> connfd = connfd;
     new_client -> next = client_list;
@@ -224,19 +320,36 @@ void* handle_client (void* arg)
     broadcast_message (message, connfd);
 
     // Receive and broadcast messages
-    char buffer[1024];
     while (1) 
     {
-        ssize_t bytes_received = recv (connfd, buffer, sizeof(buffer), 0);
+        char buffer [1024];
+        char *decoded_data = NULL;
+
+        ssize_t bytes_received = recv (connfd, buffer, sizeof (buffer), 0);
         if (bytes_received <= 0)
             break;
 
         buffer [bytes_received] = '\0';
+
+        if (process_websocket_frame (buffer, bytes_received, &decoded_data, connfd) != 0) 
+        {
+            printf("Error processing WebSocket frame\n");
+            close(connfd);
+            continue;
+        }
+
         char full_message [1136];
-        sprintf (full_message, "User %d: %s", connfd, buffer);
+        sprintf (full_message, "User %d: %s", connfd, decoded_data);
 
         // Broadcast the message to all clients
         broadcast_message (full_message, connfd);
+
+        // bzero (buffer, sizeof (buffer));
+        // ssize_t bytes_received = recv (connfd, buffer, sizeof (buffer), 0);
+        // if (bytes_received <= 0)
+        //     break;
+
+        // printf ("Client: %s\n", buffer);
     }
 
     // Remove the disconnected client from the list
@@ -296,7 +409,7 @@ void handle_websocket_upgrade (int client_socket, char *request)
 
     // Extract the value of Sec-WebSocket-Key header
     char *key_start = strstr (request, "Sec-WebSocket-Key: ") + 19;
-    char *key_end = strchr (key_start, "\r\n");
+    char *key_end = strstr (key_start, "\r\n");
     
     if (!key_start || !key_end) 
     {
@@ -320,16 +433,16 @@ void handle_websocket_upgrade (int client_socket, char *request)
     sprintf (response, upgrade_response_format, accept_key);
     send (client_socket, response, strlen (response), 0);
 
-    printf("WebSocket handshake complete\n");
+    printf ("WebSocket handshake complete\n");
 }
 
-int server_creation()
+int server_creation ()
 {
 	int sockfd;
 	struct addrinfo hints, *servinfo, *p;
 	int yes = 1;
 	int rv;
-	memset (&hints,0,sizeof (hints));
+	memset (&hints, 0, sizeof (hints));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;// my ip
@@ -369,9 +482,10 @@ int server_creation()
 	}
 	
 	// server will be listening with maximum simultaneos connections of BACKLOG
-	if(listen(sockfd,BACKLOG) == -1){ 
-		perror("listen");
-		exit(1); 
+	if (listen (sockfd, BACKLOG) == -1)
+    { 
+		perror ("listen");
+		exit (1); 
 	} 
 	return sockfd;
 }
@@ -380,13 +494,14 @@ int connection_accepting (int sockfd)
 {
 	int connfd;
 	struct sockaddr_storage their_addr;
-	char s[INET6_ADDRSTRLEN];
+	char s [INET6_ADDRSTRLEN];
 	socklen_t sin_size;
 	
 	sin_size = sizeof (their_addr); 
 	connfd = accept (sockfd, (SA*)&their_addr, &sin_size); 
-	if(connfd == -1){ 
-		perror("\naccept error\n");
+	if (connfd == -1)
+    { 
+		perror ("\naccept error\n");
 		return -1;
 	} 
 
@@ -417,7 +532,7 @@ int main()
 
     while (1) 
     {
-        connfd = connection_accepting ();
+        connfd = connection_accepting (sockfd);
         if (connfd < 0) 
             continue;
 
