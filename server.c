@@ -57,28 +57,30 @@ void mask_payload (uint8_t *payload, size_t payload_length, uint8_t *mask)
         payload [i] ^= mask [i % 4];
 }
 
-void send_frame(const uint8_t *frame, size_t length,int connfd) {
-    ssize_t bytes_sent = send(connfd, frame, length, 0);
-    if (bytes_sent == -1) {
+void send_frame (const uint8_t *frame, size_t length, int connfd) 
+{
+    ssize_t bytes_sent = send (connfd, frame, length, 0);
+    if (bytes_sent == -1)
         perror("Send failed");
-    } else {
+    else
         printf("Pong Frame sent to client\n");
-    }
 }
 
-void send_pong(const char *payload, size_t payload_length,int connfd) {
-    uint8_t pong_frame[128];
-    pong_frame[0] = 0xA;
-    pong_frame[1] = (uint8_t)payload_length;
-    memcpy(pong_frame + 2, payload, payload_length);
-    send_frame(pong_frame, payload_length + 2,connfd);
+void send_pong(const char *payload, size_t payload_length, int connfd) 
+{
+    uint8_t pong_frame [128];
+    pong_frame [0] = 0xA;
+    pong_frame [1] = (uint8_t) payload_length;
+    memcpy (pong_frame + 2, payload, payload_length);
+    send_frame (pong_frame, payload_length + 2, connfd);
 }
 
-void handle_ping(const uint8_t *data, size_t length,int connfd) {
-    char ping_payload[126];
-    memcpy(ping_payload, data + 2, length - 2);
-    ping_payload[length - 2] = '\0';
-    send_pong(ping_payload, length - 2,connfd);
+void handle_ping (const uint8_t *data, size_t length, int connfd) 
+{
+    char ping_payload [126];
+    memcpy (ping_payload, data + 2, length - 2);
+    ping_payload [length - 2] = '\0';
+    send_pong (ping_payload, length - 2, connfd);
 }
 
 //Add client to list
@@ -173,9 +175,7 @@ int process_websocket_frame (uint8_t *data, size_t length, char **decoded_data, 
     }
     header_size += 2;
     
-    size_t payload_offset = header_size;
-    
-    
+    size_t payload_offset = header_size; 
     if (opcode == 0x9) 
     {
         handle_ping (data, length, connfd);
@@ -195,7 +195,6 @@ int process_websocket_frame (uint8_t *data, size_t length, char **decoded_data, 
 	     (*decoded_data) [i] = data [payload_offset + i] ^ masking_key [i % 4];
 
     (*decoded_data) [payload_length] = '\0';
-
     return 0;
 }
 
@@ -257,7 +256,6 @@ int encode_websocket_frame (
 
     // Copy payload after header
     memcpy (frame_buffer + header_size, payload, payload_length);
-
     return header_size + payload_length; // Total frame size
 }
 
@@ -277,7 +275,6 @@ int send_websocket_frame (int client_socket, int userid, uint8_t fin, uint8_t op
     }
 
     printf ("Message sent to client: %d\n", userid);
-
     return 0;
 }
 
@@ -357,7 +354,6 @@ void* handle_client (void* arg)
         ssize_t bytes_received = recv (connfd, buffer, sizeof (buffer), 0);
         if (bytes_received <= 0)
             break;
-
         buffer [bytes_received] = '\0';
 
         int status = process_websocket_frame (buffer, bytes_received, &decoded_data, connfd);
