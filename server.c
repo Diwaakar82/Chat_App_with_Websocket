@@ -185,7 +185,7 @@ int process_websocket_frame (uint8_t *data, size_t length, char **decoded_data, 
     else if (opcode == 0x8) 
     {
     	printf ("closes the connection\n");
-        queue_remove (connfd);
+        return -1;
     }
 
     *decoded_data = (char *)malloc (payload_length + 1);
@@ -290,7 +290,19 @@ void broadcast_message (char* message, int sender_connfd)
 	}
 }
 
+void send_message (char* message, int sender_connfd, int userid) 
+{
+    for (int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if (clients [i] && clients [i] -> userid == userid)
+        {
+		    send_websocket_frame (clients [i] -> connfd, clients [i] -> userid, 1, 1, message);
+            break;
+        }
+	}
+}
 
+//Get list of active users
 char* extractActiveUsersString (int userid) 
 {
     int length = 15;
@@ -348,27 +360,40 @@ void* handle_client (void* arg)
 
         buffer [bytes_received] = '\0';
 
-        if (process_websocket_frame (buffer, bytes_received, &decoded_data, connfd) != 0) 
+        int status = process_websocket_frame (buffer, bytes_received, &decoded_data, connfd);
+        if (status == -1)
+            break;
+        else if (status != 0) 
         {
             printf("Error processing WebSocket frame\n");
             close(connfd);
             continue;
-        }
+        } 
 
-        char full_message [1136];
+        char full_message [1136], id_str [5];
+        int id;
         if (strstr (decoded_data, "activeUsers"))
         {
             strcpy (full_message, extractActiveUsersString (new_client -> userid));
             send_websocket_frame (new_client -> connfd, new_client -> userid, 1, 1, full_message);
             send_websocket_frame (new_client -> connfd, new_client -> userid, 1, 1, "To message particular user (<userid>: <message>)");
-            continue;
         }
-        
-        sprintf (full_message, "User %d: %s", new_client -> userid, decoded_data);
+        else if (strchr (decoded_data, ':'))
+        {
+            strncpy (id_str, decoded_data, 4);
+            id_str [5] = '\0';
+            id = atoi (id_str);
 
-        // Broadcast the message to all clients
-        broadcast_message (full_message, connfd);
+            sprintf (full_message, "User %d: %s", new_client -> userid, decoded_data + 6);
+            send_message (full_message, connfd, id);
+        }
+        else
+        {
+            sprintf (full_message, "User %d: %s", new_client -> userid, decoded_data);
 
+            // Broadcast the message to all clients
+            broadcast_message (full_message, connfd);
+        }
     }
 
     // Notify all clients about the user leaving
