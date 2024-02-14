@@ -262,7 +262,7 @@ int encode_websocket_frame (
 }
 
 // Function to send WebSocket frame to the client
-int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *payload) 
+int send_websocket_frame (int client_socket, int userid, uint8_t fin, uint8_t opcode, char *payload) 
 {
     // Encode the WebSocket frame
     uint8_t encoded_data [1024];
@@ -276,7 +276,7 @@ int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *
         return -1;
     }
 
-    printf ("Message sent to client: %d, %s\n", client_socket, payload);
+    printf ("Message sent to client: %d\n", userid);
 
     return 0;
 }
@@ -286,7 +286,7 @@ void broadcast_message (char* message, int sender_connfd)
     for (int i = 0; i < MAX_CLIENTS; i++)
 	{
 		if (clients [i] && clients [i] -> connfd != sender_connfd)
-		    send_websocket_frame (clients [i] -> connfd, 1, 1, message);
+		    send_websocket_frame (clients [i] -> connfd, clients [i] -> userid, 1, 1, message);
 	}
 }
 
@@ -333,7 +333,7 @@ void* handle_client (void* arg)
 
     // Notify all clients about the new user
     char message [128];
-    sprintf (message, "User %d has joined the chat.", connfd);
+    sprintf (message, "User %d has joined the chat.", new_client -> userid);
     broadcast_message (message, connfd);
 
     // Receive and broadcast messages
@@ -359,24 +359,24 @@ void* handle_client (void* arg)
         if (strstr (decoded_data, "activeUsers"))
         {
             strcpy (full_message, extractActiveUsersString (new_client -> userid));
-            send_websocket_frame (new_client -> connfd, 1, 1, full_message);
-            send_websocket_frame (new_client -> connfd, 1, 1, "To message particular user (<userid>: <message>)");
+            send_websocket_frame (new_client -> connfd, new_client -> userid, 1, 1, full_message);
+            send_websocket_frame (new_client -> connfd, new_client -> userid, 1, 1, "To message particular user (<userid>: <message>)");
             continue;
         }
         
-        sprintf (full_message, "User %d: %s", connfd, decoded_data);
+        sprintf (full_message, "User %d: %s", new_client -> userid, decoded_data);
 
         // Broadcast the message to all clients
         broadcast_message (full_message, connfd);
 
     }
 
+    // Notify all clients about the user leaving
+    sprintf (message, "User %d has left the chat.", new_client -> userid);
+    broadcast_message (message, connfd);
+
     // Remove the disconnected client from the list
     queue_remove (connfd);
-
-    // Notify all clients about the user leaving
-    sprintf (message, "User %d has left the chat.", connfd);
-    broadcast_message (message, connfd);
 
     // Close the connection
     close (connfd);
