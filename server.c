@@ -105,9 +105,10 @@ void queue_remove (int connfd)
 	
 	for (int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if (clients [i] -> connfd == connfd)
+		if (clients [i] && clients [i] -> connfd == connfd)
 		{
 			free (clients [i]);
+            clients [i] = NULL;
 	        client_cnt--;
 			break;
 		}
@@ -337,7 +338,7 @@ void* handle_client (void* arg)
     }
 
     // Remove the disconnected client from the list
-    remove_client (connfd);
+    queue_remove (connfd);
 
     // Notify all clients about the user leaving
     sprintf (message, "User %d has left the chat.", connfd);
