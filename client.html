@@ -44,6 +44,10 @@
         messageInput.value = "";
     }
 
+    function getActiveUsers(){
+        socket.send("activeUsers");
+    }
+
     // Function to append a message to the chat area
     function appendMessage(message) {
         const chatArea = document.getElementById("chatArea");
@@ -56,6 +60,8 @@
 <div>
     <div id="chatArea" style="border: 1px solid #ccc; padding: 10px; max-height: 200px; overflow-y: auto;"></div>
     <input type="text" id="messageInput" placeholder="Type your message...">
+    <ul id="active-users"></ul>
+    <button id="getusers" onclick="getActiveUsers()">Get active users</button>
     <button onclick="sendMessage()">Send</button>
 </div>
 
