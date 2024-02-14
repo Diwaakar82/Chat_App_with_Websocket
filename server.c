@@ -15,17 +15,22 @@
 
 #define SA struct sockaddr
 #define BACKLOG 5
+#define MAX_CLIENTS 10
 #define PORT "8000"
 #define MAGIC_STRING "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-struct client_details 
-{
-    int connfd;
-    struct client_details* next;
-};
+int userid = 1000;
+static _Atomic int client_cnt = 0;
 
-pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
-struct client_details* client_list = NULL;
+typedef struct client_details
+{
+	int userid, connfd;
+	char name [20];
+} client_t;
+
+client_t *clients [MAX_CLIENTS];
+
+pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // give IPV4 or IPV6  based on the family set in the sa
 void *get_in_addr (struct sockaddr *sa)
@@ -76,29 +81,40 @@ void handle_ping(const uint8_t *data, size_t length,int connfd) {
     send_pong(ping_payload, length - 2,connfd);
 }
 
-void handle_close(int connfd) {
-    struct client_details* head = client_list;
-    struct client_details* current = head;
-    struct client_details* prev = NULL;
+//Add client to list
+void queue_add (client_t *client)
+{
+	pthread_mutex_lock (&clients_mutex);
+	
+	for (int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if (!clients [i])
+		{
+			clients [i] = client;
+			break;
+		}
+	}
+	
+	pthread_mutex_unlock (&clients_mutex);
+}
 
-    while (current != NULL) 
-    {
-        if (connfd == current -> connfd)
-        {
-        	uint8_t close_frame[] = {0x88, 0x00};
-            send (connfd, close_frame, sizeof (close_frame), 0);
-            break;
-        }
-        prev = current;
-        current = current -> next;
-    }
-    
-    if(prev == NULL)	
-    	client_list = client_list -> next;
-    else
-    	prev -> next = prev -> next -> next;
+//Remove client from list
+void queue_remove (int connfd)
+{
+	pthread_mutex_lock (&clients_mutex);
+	
+	for (int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if (clients [i] -> connfd == connfd)
+		{
+			free (clients [i]);
+	        client_cnt--;
+			break;
+		}
+	}
 
-    pthread_exit(NULL);
+	pthread_mutex_unlock (&clients_mutex);
+    pthread_detach (pthread_self ());
 }
 
 // Function to decode the header of a WebSocket frame
@@ -136,7 +152,7 @@ int decode_websocket_frame_header(
     return  (2 + (n == 1 ? 2 : (n == 2 ? 8 : 0)));
 }
 
-int process_websocket_frame(uint8_t *data, size_t length, char **decoded_data,int connfd) 
+int process_websocket_frame (uint8_t *data, size_t length, char **decoded_data, int connfd) 
 {
     uint8_t fin, opcode, mask;
     uint64_t payload_length;
@@ -168,7 +184,7 @@ int process_websocket_frame(uint8_t *data, size_t length, char **decoded_data,in
     else if (opcode == 0x8) 
     {
     	printf ("closes the connection\n");
-        handle_close (connfd);
+        queue_remove (connfd);
     }
 
     *decoded_data = (char *)malloc (payload_length + 1);
@@ -266,53 +282,21 @@ int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *
 
 void broadcast_message (char* message, int sender_connfd) 
 {
-    struct client_details* current = client_list;
-
-    while (current != NULL) 
-    {
-        if (current -> connfd != sender_connfd)
-            send_websocket_frame (current -> connfd, 1, 1, message);
-        current = current -> next;
-    }
-}
-
-void remove_client (int connfd) 
-{
-    pthread_mutex_lock (&mutex1);
-
-    struct client_details* current = client_list;
-    struct client_details* prev = NULL;
-
-    while (current != NULL) 
-    {
-        if (current -> connfd == connfd) 
-        {
-            if (prev == NULL)
-                client_list = current -> next;
-            else
-                prev -> next = current -> next;
-    
-            free(current);
-            break;
-        }
-
-        prev = current;
-        current = current -> next;
-    }
-
-    pthread_mutex_unlock (&mutex1);
+    for (int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if (clients [i] && clients [i] -> connfd != sender_connfd)
+		    send_websocket_frame (clients [i] -> connfd, 1, 1, message);
+	}
 }
 
 void* handle_client (void* arg) 
 {
     int connfd = *((int*) arg);
-    struct client_details* new_client = (struct client_details*) malloc (sizeof (struct client_details));
+    client_t* new_client = (client_t*) malloc (sizeof (client_t));
     new_client -> connfd = connfd;
-    new_client -> next = client_list;
+    new_client -> userid = userid++;
 
-    pthread_mutex_lock (&mutex1);
-    client_list = new_client;
-    pthread_mutex_unlock (&mutex1);
+    queue_add (new_client);
 
     // Notify all clients about the new user
     char message [128];
