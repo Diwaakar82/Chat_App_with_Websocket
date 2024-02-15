@@ -4,87 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebSocket Chat Client</title>
+    <link rel="stylesheet" type="text/css" href="styles.css">
 </head>
 <body>
 
-<script>
-    const socket = new WebSocket("ws://127.0.0.1:8000"); // Replace with the actual server IP and port
-    let username;
-
-    function showChat() {
-        const loginSection = document.getElementById("loginSection");
-        const chatSection = document.getElementById("chatSection");
-        
-        loginSection.style.display = "none";
-        chatSection.style.display = "block";
-    }
-
-    function setUsername() {
-        const usernameInput = document.getElementById("usernameInput");
-        username = usernameInput.value;
-        socket.send (username);
-
-        const welcomeMessage = document.getElementById("welcomeMessage");
-        welcomeMessage.innerHTML = "Welcome " + username;
-
-        usernameInput.value = "";
-        showChat();
-    }
-
-    socket.addEventListener("open", (event) => {
-        console.log("WebSocket connection opened:", event);
-    });
-
-    socket.addEventListener("message", (event) => {
-        appendMessage(event.data);
-    });
-
-    socket.addEventListener("close", (event) => {
-        console.log("WebSocket connection closed:", event);
-    });
-
-    socket.addEventListener("error", (event) => {
-        console.error("WebSocket error:", event);
-    });
-
-    function sendMessage() {
-        const messageInput = document.getElementById("messageInput");
-        const message = messageInput.value;
-        
-        // Send the message to the server along with the username
-        socket.send(message);
-        messageInput.value = "";
-    }
-
-    function getActiveUsers() {
-        socket.send("activeUsers");
-    }
-
-    function updateName() {
-        const messageInput = document.getElementById("messageInput");
-        const message = messageInput.value;
-
-        if (message.length == 0)
-        {
-            appendMessage ("Invalid name");
-            messageInput.value = "";
-            return;
-        }
-        socket.send("new_name=" + message);
-        messageInput.value = "";
-        
-        username = message;
-        const welcomeMessage = document.getElementById("welcomeMessage");
-        welcomeMessage.innerHTML = "Welcome " + username;
-    }
-
-    function appendMessage(message) {
-        const chatArea = document.getElementById("chatArea");
-        const messageElement = document.createElement("div");
-        messageElement.textContent = message;
-        chatArea.appendChild(messageElement);
-    }
-</script>
+<script src="script.js"></script>
 
 <div id="loginSection">
     <h1>Enter Your Username</h1>
@@ -96,12 +20,12 @@
     <h1>Websocket based Chat app</h1>
     <h2 id="welcomeMessage">Welcome</h2>
     <div>
-        <div id="chatArea" style="border: 1px solid #ccc; padding: 10px; max-height: 200px; overflow-y: auto;"></div>
+        <div id="chatArea"></div>
         <input type="text" id="messageInput" placeholder="Type your message...">
         <ul id="active-users"></ul>
         <button id="getusers" onclick="getActiveUsers()">Get active users</button>
-        <button onclick="sendMessage()">Send</button>
-        <button onclick="updateName()">Update Name</button>
+        <button onclick="updateName()">Update Username</button>
+        <button id="sendMessage" onclick="sendMessage()">Send message</button>
     </div>
 </div>
 
