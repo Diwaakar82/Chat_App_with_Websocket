@@ -183,10 +183,7 @@ int process_websocket_frame (uint8_t *data, size_t length, char **decoded_data, 
         return 0;
     } 
     else if (opcode == 0x8) 
-    {
-    	printf ("closes the connection\n");
         return -1;
-    }
 
     *decoded_data = (char *)malloc (payload_length + 1);
     

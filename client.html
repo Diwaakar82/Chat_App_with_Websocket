@@ -1,33 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebSocket Chat Client</title>
-    <link rel="stylesheet" type="text/css" href="styles.css">
-</head>
-<body>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>WebSocket Chat Client</title>
+        <link rel="stylesheet" type="text/css" href="styles.css">
+        <script src="script.js"></script>
+    </head>
+    <body>
+        <div id="loginSection">
+            <h1>Enter Your Username</h1>
+            <input type="text" id="usernameInput" placeholder="Username">
+            <button onclick="setUsername()">Enter Chat</button>
+        </div>
 
-<script src="script.js"></script>
+        <div id="chatSection" style="display: none;">
+            <h1>Websocket based Chat app</h1>
+            <h2 id="welcomeMessage">Welcome</h2>
 
-<div id="loginSection">
-    <h1>Enter Your Username</h1>
-    <input type="text" id="usernameInput" placeholder="Username">
-    <button onclick="setUsername()">Enter Chat</button>
-</div>
+            <div>
+                <div id="chatArea"></div>
+                <input type="text" id="messageInput" placeholder="Type your message...">
+                <ul id="active-users"></ul>
 
-<div id="chatSection" style="display: none;">
-    <h1>Websocket based Chat app</h1>
-    <h2 id="welcomeMessage">Welcome</h2>
-    <div>
-        <div id="chatArea"></div>
-        <input type="text" id="messageInput" placeholder="Type your message...">
-        <ul id="active-users"></ul>
-        <button id="getusers" onclick="getActiveUsers()">Get active users</button>
-        <button onclick="updateName()">Update Username</button>
-        <button id="sendMessage" onclick="sendMessage()">Send message</button>
-    </div>
-</div>
-
-</body>
+                <button id="getusers" onclick="getActiveUsers()">Get active users</button>
+                <button onclick="updateName()">Update Username</button>
+                <button id="sendMessage" onclick="sendMessage()">Send message</button>
+            </div>
+        </div>
+    </body>
 </html>
