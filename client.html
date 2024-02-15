@@ -36,7 +36,6 @@
     });
 
     socket.addEventListener("message", (event) => {
-        console.log("@@@");
         appendMessage(event.data);
     });
 
@@ -54,12 +53,29 @@
         
         // Send the message to the server along with the username
         socket.send(message);
-
         messageInput.value = "";
     }
 
     function getActiveUsers() {
         socket.send("activeUsers");
+    }
+
+    function updateName() {
+        const messageInput = document.getElementById("messageInput");
+        const message = messageInput.value;
+
+        if (message.length == 0)
+        {
+            appendMessage ("Invalid name");
+            messageInput.value = "";
+            return;
+        }
+        socket.send("new_name=" + message);
+        messageInput.value = "";
+        
+        username = message;
+        const welcomeMessage = document.getElementById("welcomeMessage");
+        welcomeMessage.innerHTML = "Welcome " + username;
     }
 
     function appendMessage(message) {
@@ -85,6 +101,7 @@
         <ul id="active-users"></ul>
         <button id="getusers" onclick="getActiveUsers()">Get active users</button>
         <button onclick="sendMessage()">Send</button>
+        <button onclick="updateName()">Update Name</button>
     </div>
 </div>
 

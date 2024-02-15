@@ -260,7 +260,7 @@ int encode_websocket_frame (
 }
 
 // Function to send WebSocket frame to the client
-int send_websocket_frame (int client_socket, int userid, uint8_t fin, uint8_t opcode, char *payload) 
+int send_websocket_frame (int client_socket, char *username, uint8_t fin, uint8_t opcode, char *payload) 
 {
     // Encode the WebSocket frame
     uint8_t encoded_data [1024];
@@ -274,7 +274,7 @@ int send_websocket_frame (int client_socket, int userid, uint8_t fin, uint8_t op
         return -1;
     }
 
-    printf ("Message sent to client: %d\n", userid);
+    printf ("Message sent to client: %s\n", username);
     return 0;
 }
 
@@ -283,7 +283,7 @@ void broadcast_message (char* message, int sender_connfd)
     for (int i = 0; i < MAX_CLIENTS; i++)
 	{
 		if (clients [i] && clients [i] -> connfd != sender_connfd)
-		    send_websocket_frame (clients [i] -> connfd, clients [i] -> userid, 1, 1, message);
+		    send_websocket_frame (clients [i] -> connfd, clients [i] -> name, 1, 1, message);
 	}
 }
 
@@ -293,7 +293,7 @@ void send_message (char* message, int sender_connfd, char* username)
 	{
 		if (clients [i] && strcmp (clients [i] -> name, username) == 0)
         {
-		    send_websocket_frame (clients [i] -> connfd, clients [i] -> userid, 1, 1, message);
+		    send_websocket_frame (clients [i] -> connfd, clients [i] -> name, 1, 1, message);
             break;
         }
 	}
@@ -400,8 +400,8 @@ void* handle_client (void* arg)
         if (strstr (decoded_data, "activeUsers"))
         {
             strcpy (full_message, extractActiveUsersString (new_client -> userid));
-            send_websocket_frame (new_client -> connfd, new_client -> userid, 1, 1, full_message);
-            send_websocket_frame (new_client -> connfd, new_client -> userid, 1, 1, "To message particular user (<userid>: <message>)");
+            send_websocket_frame (new_client -> connfd, new_client -> name, 1, 1, full_message);
+            send_websocket_frame (new_client -> connfd, new_client -> name, 1, 1, "To message particular user (<userid>: <message>)");
         }
         else if (strchr (decoded_data, ':'))
         {
@@ -414,10 +414,15 @@ void* handle_client (void* arg)
             printf ("Sending: %s\n", full_message);
             send_message (full_message, connfd, reciever_name);
         }
+        else if (strstr (decoded_data, "new_name="))
+        {
+            strcpy (new_client -> name, decoded_data + 9);
+            send_websocket_frame (new_client -> connfd, new_client -> name, 1, 1, "Updated name");
+        }
         else
         {
             sprintf (full_message, "%s: %s", new_client -> name, decoded_data);
-            printf ("Broadcasting: %s\n", full_message);
+ 
             // Broadcast the message to all clients
             broadcast_message (full_message, connfd);
         }
