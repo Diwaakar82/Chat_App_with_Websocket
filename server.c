@@ -306,7 +306,7 @@ char* extractActiveUsersString (int userid)
 
     for (int i = 0; i < MAX_CLIENTS; i++)
         if (clients [i] && userid != clients [i] -> userid)
-        	length += 6;
+        	length += 20;
 
     if (length == 15)
         return "No active users!!!";
@@ -323,7 +323,7 @@ char* extractActiveUsersString (int userid)
 
     for (int i = 0; i < MAX_CLIENTS; i++)
         if (clients [i] && userid != clients [i] -> userid)
-        	pos += snprintf (pos, length + 1, "%d, ", clients [i] -> userid);
+        	pos += snprintf (pos, length + 1, "%s, ", clients [i] -> name);
 
     if (length > 15)
         *(pos - 2) = '\0';
@@ -371,14 +371,13 @@ void* handle_client (void* arg)
 
     // Notify all clients about the new user
     char message [128];
-    printf ("Name: %s\n", decoded_name);
-    sprintf (message, "User %s has joined the chat.", new_client -> name);
+    sprintf (message, "%s has joined the chat.", new_client -> name);
     broadcast_message (message, connfd);
 
     // Receive and broadcast messages
     while (1) 
     {
-        char buffer [1024];
+        char buffer [1024], reciever_name [20];
         char *decoded_data = NULL;
 
         ssize_t bytes_received = recv (connfd, buffer, sizeof (buffer), 0);
@@ -406,24 +405,26 @@ void* handle_client (void* arg)
         }
         else if (strchr (decoded_data, ':'))
         {
-            strncpy (id_str, decoded_data, 4);
-            id_str [5] = '\0';
-            id = atoi (id_str);
-
-            sprintf (full_message, "User %d: %s", new_client -> userid, decoded_data + 6);
+            int end = strchr (decoded_data, ':') - decoded_data;
+            strncpy (reciever_name, decoded_data, end);
+            reciever_name [end] = '\0';
+            printf ("Send to: %s\n", reciever_name);
+            //id = atoi (id_str);
+            
+            sprintf (full_message, "%s: %s", new_client -> name, decoded_data + 6);
             send_message (full_message, connfd, id);
         }
         else
         {
-            sprintf (full_message, "User %d: %s", new_client -> userid, decoded_data);
-
+            sprintf (full_message, "%s: %s", new_client -> name, decoded_data);
+            printf ("Broadcasting: %s\n", full_message);
             // Broadcast the message to all clients
             broadcast_message (full_message, connfd);
         }
     }
 
     // Notify all clients about the user leaving
-    sprintf (message, "User %d has left the chat.", new_client -> userid);
+    sprintf (message, "User %s has left the chat.", new_client -> name);
     broadcast_message (message, connfd);
 
     // Remove the disconnected client from the list

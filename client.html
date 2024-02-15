@@ -14,7 +14,7 @@
     function showChat() {
         const loginSection = document.getElementById("loginSection");
         const chatSection = document.getElementById("chatSection");
-
+        
         loginSection.style.display = "none";
         chatSection.style.display = "block";
     }
@@ -23,6 +23,11 @@
         const usernameInput = document.getElementById("usernameInput");
         username = usernameInput.value;
         socket.send (username);
+
+        const welcomeMessage = document.getElementById("welcomeMessage");
+        welcomeMessage.innerHTML = "Welcome " + username;
+
+        usernameInput.value = "";
         showChat();
     }
 
@@ -31,6 +36,7 @@
     });
 
     socket.addEventListener("message", (event) => {
+        console.log("@@@");
         appendMessage(event.data);
     });
 
@@ -45,9 +51,9 @@
     function sendMessage() {
         const messageInput = document.getElementById("messageInput");
         const message = messageInput.value;
-
+        
         // Send the message to the server along with the username
-        socket.send(username + ": " + message);
+        socket.send(message);
 
         messageInput.value = "";
     }
@@ -72,6 +78,7 @@
 
 <div id="chatSection" style="display: none;">
     <h1>Websocket based Chat app</h1>
+    <h2 id="welcomeMessage">Welcome</h2>
     <div>
         <div id="chatArea" style="border: 1px solid #ccc; padding: 10px; max-height: 200px; overflow-y: auto;"></div>
         <input type="text" id="messageInput" placeholder="Type your message...">
