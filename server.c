@@ -273,8 +273,6 @@ int send_websocket_frame (int client_socket, char *username, uint8_t fin, uint8_
         perror ("Send failed");
         return -1;
     }
-
-    printf ("Message sent to client: %s\n", username);
     return 0;
 }
 
@@ -289,7 +287,8 @@ void broadcast_message (char* message, int sender_connfd)
 
 void send_message (char* message, int sender_connfd, char* username) 
 {
-    for (int i = 0; i < MAX_CLIENTS; i++)
+    int i = 0;
+    for (i = 0; i < MAX_CLIENTS; i++)
 	{
 		if (clients [i] && strcmp (clients [i] -> name, username) == 0)
         {
@@ -297,6 +296,9 @@ void send_message (char* message, int sender_connfd, char* username)
             break;
         }
 	}
+
+    if (i == MAX_CLIENTS)
+        send_websocket_frame (sender_connfd, username, 1, 1, "User not found!!!\n");
 }
 
 //Get list of active users
@@ -372,6 +374,7 @@ void* handle_client (void* arg)
     // Notify all clients about the new user
     char message [128];
     sprintf (message, "%s has joined the chat.", new_client -> name);
+    printf ("%s\n", message);
     broadcast_message (message, connfd);
 
     // Receive and broadcast messages
@@ -408,10 +411,8 @@ void* handle_client (void* arg)
             int end = strchr (decoded_data, ':') - decoded_data;
             strncpy (reciever_name, decoded_data, end);
             reciever_name [end] = '\0';
-            printf ("Send to: %s\n", reciever_name);
             
             sprintf (full_message, "%s%s", new_client -> name, decoded_data + end);
-            printf ("Sending: %s\n", full_message);
             send_message (full_message, connfd, reciever_name);
         }
         else if (strstr (decoded_data, "new_name="))
@@ -429,7 +430,8 @@ void* handle_client (void* arg)
     }
 
     // Notify all clients about the user leaving
-    sprintf (message, "User %s has left the chat.", new_client -> name);
+    sprintf (message, "%s has left the chat.", new_client -> name);
+    printf ("%s\n", message);
     broadcast_message (message, connfd);
 
     // Remove the disconnected client from the list
