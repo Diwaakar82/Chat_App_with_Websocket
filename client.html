@@ -9,6 +9,22 @@
 
 <script>
     const socket = new WebSocket("ws://127.0.0.1:8000"); // Replace with the actual server IP and port
+    let username;
+
+    function showChat() {
+        const loginSection = document.getElementById("loginSection");
+        const chatSection = document.getElementById("chatSection");
+
+        loginSection.style.display = "none";
+        chatSection.style.display = "block";
+    }
+
+    function setUsername() {
+        const usernameInput = document.getElementById("usernameInput");
+        username = usernameInput.value;
+        socket.send (username);
+        showChat();
+    }
 
     socket.addEventListener("open", (event) => {
         console.log("WebSocket connection opened:", event);
@@ -26,23 +42,20 @@
         console.error("WebSocket error:", event);
     });
 
-    // Function to send a message to the server
     function sendMessage() {
         const messageInput = document.getElementById("messageInput");
         const message = messageInput.value;
 
-        // Send the message to the server
-        socket.send(message);
+        // Send the message to the server along with the username
+        socket.send(username + ": " + message);
 
-        // Clear the input field
         messageInput.value = "";
     }
 
-    function getActiveUsers(){
+    function getActiveUsers() {
         socket.send("activeUsers");
     }
 
-    // Function to append a message to the chat area
     function appendMessage(message) {
         const chatArea = document.getElementById("chatArea");
         const messageElement = document.createElement("div");
@@ -51,14 +64,21 @@
     }
 </script>
 
-<h1>Websocket based Chat app</h1>
+<div id="loginSection">
+    <h1>Enter Your Username</h1>
+    <input type="text" id="usernameInput" placeholder="Username">
+    <button onclick="setUsername()">Enter Chat</button>
+</div>
 
-<div>
-    <div id="chatArea" style="border: 1px solid #ccc; padding: 10px; max-height: 200px; overflow-y: auto;"></div>
-    <input type="text" id="messageInput" placeholder="Type your message...">
-    <ul id="active-users"></ul>
-    <button id="getusers" onclick="getActiveUsers()">Get active users</button>
-    <button onclick="sendMessage()">Send</button>
+<div id="chatSection" style="display: none;">
+    <h1>Websocket based Chat app</h1>
+    <div>
+        <div id="chatArea" style="border: 1px solid #ccc; padding: 10px; max-height: 200px; overflow-y: auto;"></div>
+        <input type="text" id="messageInput" placeholder="Type your message...">
+        <ul id="active-users"></ul>
+        <button id="getusers" onclick="getActiveUsers()">Get active users</button>
+        <button onclick="sendMessage()">Send</button>
+    </div>
 </div>
 
 </body>

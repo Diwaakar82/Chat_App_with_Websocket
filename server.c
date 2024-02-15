@@ -333,16 +333,46 @@ char* extractActiveUsersString (int userid)
 
 void* handle_client (void* arg) 
 {
-    int connfd = *((int*) arg);
+    int connfd = *((int*) arg), status;
+    char name [30], *decoded_name = NULL;
+
+    if (recv (connfd, name, sizeof (name), 0) <= 0)
+    {
+        perror ("recv");
+        close (connfd);
+
+        free (arg);
+        pthread_exit (NULL);
+        return NULL;
+    }
+
+    status = process_websocket_frame (name, sizeof (name), &decoded_name, connfd);
+    if (status == -1)
+    {
+        free (arg);
+        pthread_exit (NULL);
+        return NULL;
+    }
+    else if (status != 0) 
+    {
+        printf("Error processing WebSocket frame\n");
+        close(connfd);
+        free (arg);
+        pthread_exit (NULL);
+        return NULL;
+    } 
+
     client_t* new_client = (client_t*) malloc (sizeof (client_t));
     new_client -> connfd = connfd;
     new_client -> userid = userid++;
-
+    strcpy (new_client -> name, decoded_name);
+    
     queue_add (new_client);
 
     // Notify all clients about the new user
     char message [128];
-    sprintf (message, "User %d has joined the chat.", new_client -> userid);
+    printf ("Name: %s\n", decoded_name);
+    sprintf (message, "User %s has joined the chat.", new_client -> name);
     broadcast_message (message, connfd);
 
     // Receive and broadcast messages
