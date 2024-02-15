@@ -287,11 +287,11 @@ void broadcast_message (char* message, int sender_connfd)
 	}
 }
 
-void send_message (char* message, int sender_connfd, int userid) 
+void send_message (char* message, int sender_connfd, char* username) 
 {
     for (int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if (clients [i] && clients [i] -> userid == userid)
+		if (clients [i] && strcmp (clients [i] -> name, username) == 0)
         {
 		    send_websocket_frame (clients [i] -> connfd, clients [i] -> userid, 1, 1, message);
             break;
@@ -409,10 +409,10 @@ void* handle_client (void* arg)
             strncpy (reciever_name, decoded_data, end);
             reciever_name [end] = '\0';
             printf ("Send to: %s\n", reciever_name);
-            //id = atoi (id_str);
             
-            sprintf (full_message, "%s: %s", new_client -> name, decoded_data + 6);
-            send_message (full_message, connfd, id);
+            sprintf (full_message, "%s%s", new_client -> name, decoded_data + end);
+            printf ("Sending: %s\n", full_message);
+            send_message (full_message, connfd, reciever_name);
         }
         else
         {
