@@ -1,14 +1,5 @@
 const socket = new WebSocket ("ws://127.0.0.1:8000");
-let username;
-
-function showChat () 
-{
-    const loginSection = document.getElementById ("loginSection");
-    const chatSection = document.getElementById ("chatSection");
-
-    loginSection.style.display = "none";
-    chatSection.style.display = "block";
-}
+let username = undefined;
 
 function setUsername () 
 {
@@ -20,15 +11,30 @@ function setUsername ()
     welcomeMessage.innerHTML = "Welcome " + username;
 
     usernameInput.value = "";
-    showChat ();
 }
 
 socket.addEventListener ("message", (event) => {
     appendMessage (event.data);
 });
 
+function addUsername ()
+{
+    const chatArea = document.getElementById ("chatArea");
+    const messageElement = document.createElement ("div");
+
+    chatArea.style.display = "block";
+    messageElement.textContent = "Please enter your name";
+    chatArea.appendChild (messageElement);
+}
+
 function sendMessage () 
 {
+    if (username === undefined)
+    {
+        addUsername ();
+        return;
+    }
+    
     const messageInput = document.getElementById ("messageInput");
     const message = messageInput.value;
     
@@ -39,6 +45,12 @@ function sendMessage ()
 
 function getActiveUsers () 
 {
+    if (username === undefined)
+    {
+        addUsername ();
+        return;
+    }
+
     socket.send ("activeUsers");
 }
 
@@ -69,5 +81,9 @@ function appendMessage (message)
 
     chatArea.style.display = "block";
     messageElement.textContent = message;
+
+    if (username === undefined)
+        messageElement.textContent = "Please enter your name";
+
     chatArea.appendChild (messageElement);
 }

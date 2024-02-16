@@ -64,11 +64,6 @@ button:hover
     padding: auto 15px;
 }
 
-#chatSection 
-{
-    display: none;
-}
-
 #chatArea 
 {
     border: 1px solid #555;
