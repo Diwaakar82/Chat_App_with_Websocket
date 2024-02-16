@@ -1,18 +1,6 @@
 const socket = new WebSocket ("ws://127.0.0.1:8000");
 let username = undefined;
 
-function setUsername () 
-{
-    const usernameInput = document.getElementById ("usernameInput");
-    username = usernameInput.value;
-    socket.send (username);
-
-    const welcomeMessage = document.getElementById ("welcomeMessage");
-    welcomeMessage.innerHTML = "Welcome " + username;
-
-    usernameInput.value = "";
-}
-
 socket.addEventListener ("message", (event) => {
     appendMessage (event.data);
 });
@@ -34,12 +22,24 @@ function sendMessage ()
         addUsername ();
         return;
     }
-    
+
     const messageInput = document.getElementById ("messageInput");
     const message = messageInput.value;
-    
+    const index = message.indexOf (":");
+    let request;
+
+    if (index !== -1)
+    {
+        request = '{Type: 3, User: ' + message.slice (0, index) + ', Message: ' + message.slice (index + 1) + '}';
+    }
+    else
+    {
+        request = '{Type: 2, Message: ' + message + '}';
+    }
+
     // Send the message to the server along with the username
-    socket.send (message);
+    console.log (request);
+    socket.send (request);
     messageInput.value = "";
 }
 
@@ -51,7 +51,9 @@ function getActiveUsers ()
         return;
     }
 
-    socket.send ("activeUsers");
+    const request = '{Type: 4}';
+    console.log (request);
+    socket.send (request);
 }
 
 function updateName () 
@@ -66,7 +68,9 @@ function updateName ()
         return;
     }
 
-    socket.send ("new_name=" + message);
+    const request = '{Type: 1, Message: ' + message + '}';
+    console.log (request)
+    socket.send (request);
     messageInput.value = "";
     
     username = message;
@@ -83,7 +87,14 @@ function appendMessage (message)
     messageElement.textContent = message;
 
     if (username === undefined)
-        messageElement.textContent = "Please enter your name";
-
+    {
+        message = "Please enter your name";
+        messageElement.textContent = message;
+    }
+    else
+    {
+        let index = message.indexOf ("Message: ") + 9;
+        messageElement.textContent = message.slice (index, message.length - 1);
+    }
     chatArea.appendChild (messageElement);
 }

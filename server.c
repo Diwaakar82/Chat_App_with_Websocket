@@ -178,7 +178,7 @@ int process_websocket_frame (uint8_t *data, size_t length, char **decoded_data, 
     size_t payload_offset = header_size; 
     if (opcode == 0x9) 
     {
-        handle_ping (data, length, connfd);
+        //handle_ping (data, length, connfd);
         *decoded_data = NULL;
         return 0;
     } 
@@ -257,7 +257,7 @@ int encode_websocket_frame (
 }
 
 // Function to send WebSocket frame to the client
-int send_websocket_frame (int client_socket, char *username, uint8_t fin, uint8_t opcode, char *payload) 
+int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *payload) 
 {
     // Encode the WebSocket frame
     uint8_t encoded_data [1024];
@@ -275,31 +275,52 @@ int send_websocket_frame (int client_socket, char *username, uint8_t fin, uint8_
 
 void broadcast_message (char* message, int sender_connfd) 
 {
+    char response_sender [1136], response [1136];
+
+    //Broadcast response
+    strcat (response, "{Type: 2, Status: 104, Message: ");
+    strcat (response, message);
+    strcat (response, "}");
+
+
+    //Response to sender
+    strcat (response_sender, "{Type: 2, Status: 104, Message: Message sent}");
     for (int i = 0; i < MAX_CLIENTS; i++)
 	{
 		if (clients [i] && clients [i] -> connfd != sender_connfd)
-		    send_websocket_frame (clients [i] -> connfd, clients [i] -> name, 1, 1, message);
+		    send_websocket_frame (clients [i] -> connfd, 1, 1, response);
+        if (clients [i] && clients [i] -> connfd == sender_connfd)
+            send_websocket_frame (clients [i] -> connfd, 1, 1, response_sender);
 	}
 }
 
 void send_message (char* message, int sender_connfd, char* username) 
 {
-    int i = 0;
-    for (i = 0; i < MAX_CLIENTS; i++)
+    int status = 107, connfd;
+    char response [1136];
+    
+    for (int i = 0; i < MAX_CLIENTS; i++)
 	{
 		if (clients [i] && strcmp (clients [i] -> name, username) == 0)
         {
-		    send_websocket_frame (clients [i] -> connfd, clients [i] -> name, 1, 1, message);
+            status = 104;
+            connfd = clients [i] -> connfd;
             break;
         }
 	}
 
-    if (i == MAX_CLIENTS)
-        send_websocket_frame (sender_connfd, username, 1, 1, "User not found!!!\n");
+    if (status == 104)
+    {
+        send_websocket_frame (connfd, 1, 1, "{Type: 3, Status: 104, Message: Message sent}");
+        sprintf (response, "{Type: 3, Status: 104, Message: %s}", message);
+        send_websocket_frame (sender_connfd, 1, 1, response);
+    }
+    else
+        send_websocket_frame (connfd, 1, 1, "{Type: 3, Status: 107, Message: User doesn't exist}");
 }
 
 //Get list of active users
-char* extractActiveUsersString (int userid) 
+char* extractActiveUsersString (int userid, char *status_code, char *msg) 
 {
     int length = 15;
 
@@ -308,7 +329,11 @@ char* extractActiveUsersString (int userid)
         	length += 20;
 
     if (length == 15)
-        return "No active users!!!";
+    {
+        strcpy (msg, "No active users!!!");
+        strcpy (status_code, "105");
+        return NULL;
+    }
 
     char *result = (char*)malloc (length + 10);
     if (result == NULL) 
@@ -318,8 +343,8 @@ char* extractActiveUsersString (int userid)
     }
 
     char* pos = result;
-    pos += snprintf (pos, length, "Active Users: ");
 
+    strcpy (status_code, "108");
     for (int i = 0; i < MAX_CLIENTS; i++)
         if (clients [i] && userid != clients [i] -> userid)
         	pos += snprintf (pos, length + 1, "%s, ", clients [i] -> name);
@@ -330,55 +355,32 @@ char* extractActiveUsersString (int userid)
     return result;
 }
 
+int check_name_exists (char *name)
+{
+    for (int i = 0; i < MAX_CLIENTS; i++)
+        if (clients [i] && !strcmp (clients [i] -> name, name))
+            return 1;
+    return 0;
+}
+
 void* handle_client (void* arg) 
 {
     int connfd = *((int*) arg), status;
     char name [30], *decoded_name = NULL;
 
-    if (recv (connfd, name, sizeof (name), 0) <= 0)
-    {
-        perror ("recv");
-        close (connfd);
-
-        free (arg);
-        pthread_exit (NULL);
-        return NULL;
-    }
-
-    status = process_websocket_frame (name, sizeof (name), &decoded_name, connfd);
-    if (status == -1)
-    {
-        free (arg);
-        pthread_exit (NULL);
-        return NULL;
-    }
-    else if (status != 0) 
-    {
-        printf("Error processing WebSocket frame\n");
-        close(connfd);
-        free (arg);
-        pthread_exit (NULL);
-        return NULL;
-    } 
-
     client_t* new_client = (client_t*) malloc (sizeof (client_t));
     new_client -> connfd = connfd;
     new_client -> userid = userid++;
-    strcpy (new_client -> name, decoded_name);
     
     queue_add (new_client);
-
-    // Notify all clients about the new user
-    char message [128];
-    sprintf (message, "%s has joined the chat.", new_client -> name);
-    printf ("%s\n", message);
-    broadcast_message (message, connfd);
 
     // Receive and broadcast messages
     while (1) 
     {
-        char buffer [1024], reciever_name [20];
+        char buffer [1024];
         char *decoded_data = NULL;
+        char response [1136];
+        char msg [100];
 
         ssize_t bytes_received = recv (connfd, buffer, sizeof (buffer), 0);
         if (bytes_received <= 0)
@@ -395,38 +397,70 @@ void* handle_client (void* arg)
             continue;
         } 
 
-        char full_message [1136], id_str [5];
-        int id;
-        if (strstr (decoded_data, "activeUsers"))
+        switch (decoded_data [7])
         {
-            strcpy (full_message, extractActiveUsersString (new_client -> userid));
-            send_websocket_frame (new_client -> connfd, new_client -> name, 1, 1, full_message);
-            send_websocket_frame (new_client -> connfd, new_client -> name, 1, 1, "To message particular user (<userid>: <message>)");
+            case '1':
+                strcpy (name, strstr (decoded_data, "Message: ") + 9);
+                name [strlen (name) - 1] = '\0';
+
+                if (!check_name_exists (name))
+                {
+                    char message [50];
+                    strcpy (new_client -> name, name);
+                    // broadcast_message (message, connfd);
+
+                    strcat (response, "{Type: 1, Status: 101, Message: Name updated}");
+                    send_websocket_frame (new_client -> connfd, 1, 1, response);
+                }
+                else
+                {
+                    strcat (response, "{Type: 1, Status: 102, Message: Name already exists}");
+                    send_websocket_frame (new_client -> connfd, 1, 1, response);
+                }
+                break;
+            case '2':
+                bzero (msg, sizeof (msg));
+
+                strcpy (msg, strstr (decoded_data, "Message: ") + 9);
+                msg [strlen (msg) - 1] = '\0';
+
+                broadcast_message (msg, connfd);
+                break;
+
+            case '3':
+                char send_to [20];
+                bzero (msg, sizeof (msg));
+
+                strcpy (send_to, strstr (decoded_data, "User: ") + 6);
+                strcpy (msg, strstr (decoded_data, "Message: ") + 9);
+                msg [strlen (msg) - 1] = '\0';
+
+                //send_to end
+                printf ("Sending: %s, To: %s", msg, send_to);
+                send_message (msg, connfd, send_to);
+                break;
+
+            case '4':
+                char status_code [4], msg [30], users [1000];
+                strcpy (users, extractActiveUsersString (new_client -> userid, status_code, msg));
+                if (users)
+                    sprintf (response, "{Type: 4, Status: %s, Message: %s, Users: %s}", status_code, msg, users);
+                else
+                    sprintf (response, "{Type: 4, Status: %s, Message: %s}", status_code, msg);
+
+                send_websocket_frame (new_client -> connfd, 1, 1, response);
+                break;
+
+            default:
+                send_websocket_frame (new_client -> connfd, 1, 1, "Unkown message!!!");
+                break;
         }
-        else if (strchr (decoded_data, ':'))
-        {
-            int end = strchr (decoded_data, ':') - decoded_data;
-            strncpy (reciever_name, decoded_data, end);
-            reciever_name [end] = '\0';
-            
-            sprintf (full_message, "%s%s", new_client -> name, decoded_data + end);
-            send_message (full_message, connfd, reciever_name);
-        }
-        else if (strstr (decoded_data, "new_name="))
-        {
-            strcpy (new_client -> name, decoded_data + 9);
-            send_websocket_frame (new_client -> connfd, new_client -> name, 1, 1, "Updated name");
-        }
-        else
-        {
-            sprintf (full_message, "%s: %s", new_client -> name, decoded_data);
- 
-            // Broadcast the message to all clients
-            broadcast_message (full_message, connfd);
-        }
+
+        bzero (response, sizeof (response));
     }
 
     // Notify all clients about the user leaving
+    char message [1000];
     sprintf (message, "%s has left the chat.", new_client -> name);
     printf ("%s\n", message);
     broadcast_message (message, connfd);
