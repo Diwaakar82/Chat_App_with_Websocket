@@ -314,9 +314,9 @@ void send_message (char* message, int sender_connfd, char* username)
 
     if (status == 104)
     {
-        send_websocket_frame (connfd, 1, 1, "{Type: 3, Status: 104, Message: Message sent}");
+        send_websocket_frame (sender_connfd, 1, 1, "{Type: 3, Status: 104, Message: Message sent}");
         sprintf (response, "{Type: 3, Status: 104, Message: %s}", message);
-        send_websocket_frame (sender_connfd, 1, 1, response);
+        send_websocket_frame (connfd, 1, 1, response);
     }
     else
         send_websocket_frame (connfd, 1, 1, "{Type: 3, Status: 107, Message: User doesn't exist}");
@@ -328,7 +328,7 @@ char* extractActiveUsersString (int userid, char *status_code, char *msg)
     int length = 15;
 
     for (int i = 0; i < MAX_CLIENTS; i++)
-        if (clients [i] && userid != clients [i] -> userid)
+        if (clients [i] && userid != clients [i] -> userid && clients [i] -> name) 
         	length += 20;
 
     if (length == 15)
@@ -348,6 +348,7 @@ char* extractActiveUsersString (int userid, char *status_code, char *msg)
     char* pos = result;
 
     strcpy (status_code, "108");
+    strcpy (msg, "Fetched users!!!");
     for (int i = 0; i < MAX_CLIENTS; i++)
         if (clients [i] && userid != clients [i] -> userid)
         	pos += snprintf (pos, length + 1, "%s, ", clients [i] -> name);
@@ -381,7 +382,7 @@ void* handle_client (void* arg)
     while (1) 
     {
         char buffer [1024];
-        char *decoded_data = NULL;
+        char *decoded_data = NULL, *end;
         char response [1136];
         char msg [100];
 
@@ -425,7 +426,7 @@ void* handle_client (void* arg)
                 bzero (msg, sizeof (msg));
 
                 strcpy (msg, strstr (decoded_data, "Message: ") + 9);
-                char *end = strchr (msg, '}');
+                end = strchr (msg, '}');
                 *end = '\0';
                 //msg [strlen (msg) - 1] = '\0';
 
@@ -437,11 +438,14 @@ void* handle_client (void* arg)
                 bzero (msg, sizeof (msg));
 
                 strcpy (send_to, strstr (decoded_data, "User: ") + 6);
-                strcpy (msg, strstr (decoded_data, "Message: ") + 9);
+                end = strstr (send_to, "Message: ");
+                *(end - 2) = '\0';
+
+                sprintf (msg, "%s: %s", new_client -> name, strstr (decoded_data, "Message: ") + 10);
                 msg [strlen (msg) - 1] = '\0';
 
                 //send_to end
-                printf ("Sending: %s, To: %s", msg, send_to);
+
                 send_message (msg, connfd, send_to);
                 break;
 
