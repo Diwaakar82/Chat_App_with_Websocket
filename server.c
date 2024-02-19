@@ -261,6 +261,7 @@ int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *
 {
     // Encode the WebSocket frame
     uint8_t encoded_data [1024];
+
     int encoded_size = encode_websocket_frame (fin, opcode, 0, strlen (payload), (uint8_t *)payload, encoded_data);
 
     // Send the encoded message back to the client
@@ -276,6 +277,8 @@ int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *
 void broadcast_message (char* message, int sender_connfd) 
 {
     char response_sender [1136], response [1136];
+    bzero (response, sizeof (response));
+    bzero (response, sizeof (response_sender));
 
     //Broadcast response
     strcat (response, "{Type: 2, Status: 104, Message: ");
@@ -284,7 +287,7 @@ void broadcast_message (char* message, int sender_connfd)
 
 
     //Response to sender
-    strcat (response_sender, "{Type: 2, Status: 104, Message: Message sent}");
+    strcpy (response_sender, "{Type: 2, Status: 104, Message: Message sent}");
     for (int i = 0; i < MAX_CLIENTS; i++)
 	{
 		if (clients [i] && clients [i] -> connfd != sender_connfd)
@@ -422,7 +425,9 @@ void* handle_client (void* arg)
                 bzero (msg, sizeof (msg));
 
                 strcpy (msg, strstr (decoded_data, "Message: ") + 9);
-                msg [strlen (msg) - 1] = '\0';
+                char *end = strchr (msg, '}');
+                *end = '\0';
+                //msg [strlen (msg) - 1] = '\0';
 
                 broadcast_message (msg, connfd);
                 break;

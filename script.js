@@ -2,6 +2,7 @@ const socket = new WebSocket ("ws://127.0.0.1:8000");
 let username = undefined;
 
 socket.addEventListener ("message", (event) => {
+    console.log (event.data);
     appendMessage (event.data);
 });
 
@@ -91,9 +92,23 @@ function appendMessage (message)
         message = "Please enter your name";
         messageElement.textContent = message;
     }
+    else if (message.includes ("Name already exists"))
+    {
+        username = undefined;
+        const welcomeMessage = document.getElementById ("welcomeMessage");
+        welcomeMessage.innerHTML = "Welcome " + username;
+    }
     else
     {
-        let index = message.indexOf ("Message: ") + 9;
+        let index;
+        if (message.includes ("Users: "))
+        {
+            index =  message.indexOf ("Users: ") + 7;
+        }
+        else
+        {
+            index = message.indexOf ("Message: ") + 9;
+        }
         messageElement.textContent = message.slice (index, message.length - 1);
     }
     chatArea.appendChild (messageElement);
