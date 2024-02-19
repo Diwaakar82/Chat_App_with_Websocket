@@ -267,7 +267,6 @@ int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *
     int encoded_size = encode_websocket_frame (fin, opcode, 0, strlen (payload), (uint8_t *)payload, encoded_data);
 
     // Send the encoded message back to the client
-    printf ("Sent: %s\n", payload);
     ssize_t bytes_sent = send (client_socket, encoded_data, encoded_size, 0);
     if (bytes_sent == -1) 
     {
@@ -428,10 +427,10 @@ void* handle_client (void* arg)
             case '2':
                 bzero (msg, sizeof (msg));
 
-                strcpy (msg, strstr (decoded_data, "Message: ") + 9);
+                sprintf (msg, "%s: ", new_client -> name);
+                strcat (msg, strstr (decoded_data, "Message: ") + 9);
                 end = strchr (msg, '}');
                 *end = '\0';
-                //msg [strlen (msg) - 1] = '\0';
 
                 broadcast_message (msg, connfd);
                 break;
@@ -448,7 +447,6 @@ void* handle_client (void* arg)
                 msg [strlen (msg) - 1] = '\0';
 
                 //send_to end
-
                 send_message (msg, connfd, send_to);
                 break;
 
