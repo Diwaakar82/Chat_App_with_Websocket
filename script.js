@@ -2,7 +2,6 @@ const socket = new WebSocket ("ws://127.0.0.1:8000");
 let username = undefined;
 
 socket.addEventListener ("message", (event) => {
-    console.log (event.data);
     appendMessage (event.data);
 });
 
@@ -103,13 +102,16 @@ function appendMessage (message)
         let index;
         if (message.includes ("Users: "))
         {
-            index =  message.indexOf ("Users: ") + 7;
+            index = message.indexOf ("Users: ") + 7;
         }
         else
         {
             index = message.indexOf ("Message: ") + 9;
         }
         messageElement.textContent = message.slice (index, message.length - 1);
+
+        if (messageElement.textContent.length === 0)
+        messageElement.textContent = "No active users!!!";
     }
     chatArea.appendChild (messageElement);
 }

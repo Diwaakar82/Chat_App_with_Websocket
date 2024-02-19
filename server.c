@@ -110,7 +110,9 @@ void queue_remove (int connfd)
 		if (clients [i] && clients [i] -> connfd == connfd)
 		{
 			free (clients [i]);
+            strcpy (clients [i] -> name, "");
             clients [i] = NULL;
+            
 	        client_cnt--;
 			break;
 		}
@@ -265,6 +267,7 @@ int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *
     int encoded_size = encode_websocket_frame (fin, opcode, 0, strlen (payload), (uint8_t *)payload, encoded_data);
 
     // Send the encoded message back to the client
+    printf ("Sent: %s\n", payload);
     ssize_t bytes_sent = send (client_socket, encoded_data, encoded_size, 0);
     if (bytes_sent == -1) 
     {
@@ -319,7 +322,7 @@ void send_message (char* message, int sender_connfd, char* username)
         send_websocket_frame (connfd, 1, 1, response);
     }
     else
-        send_websocket_frame (connfd, 1, 1, "{Type: 3, Status: 107, Message: User doesn't exist}");
+        send_websocket_frame (sender_connfd, 1, 1, "{Type: 3, Status: 107, Message: User doesn't exist}");
 }
 
 //Get list of active users
@@ -328,7 +331,7 @@ char* extractActiveUsersString (int userid, char *status_code, char *msg)
     int length = 15;
 
     for (int i = 0; i < MAX_CLIENTS; i++)
-        if (clients [i] && userid != clients [i] -> userid && clients [i] -> name) 
+        if (clients [i] && userid != clients [i] -> userid) 
         	length += 20;
 
     if (length == 15)
@@ -473,6 +476,7 @@ void* handle_client (void* arg)
     sprintf (message, "%s has left the chat.", new_client -> name);
     printf ("%s\n", message);
     broadcast_message (message, connfd);
+    bzero (message, sizeof (message));
 
     // Remove the disconnected client from the list
     queue_remove (connfd);
