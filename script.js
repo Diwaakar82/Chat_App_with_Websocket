@@ -86,35 +86,34 @@ function appendMessage (message)
     chatArea.style.display = "block";
     messageElement.textContent = message;
 
+    const obj = JSON.parse (message);
     if (username === undefined)
     {
         message = "Please enter your name";
         messageElement.textContent = message;
     }
-    else if (message.includes ("Name already exists"))
+    else if (obj.Message === "Name already exists")
     {
         username = undefined;
         const welcomeMessage = document.getElementById ("welcomeMessage");
         welcomeMessage.innerHTML = "Enter valid username";
 
-        index = message.indexOf ("Message: ") + 9;
-        messageElement.textContent = message.slice (index, message.length - 1);
+        messageElement.textContent = obj.Message;
     }
     else
     {
         let index;
-        if (message.includes ("Users: "))
+        if (obj.Users !== undefined)
         {
-            index = message.indexOf ("Users: ") + 7;
+            messageElement.textContent = obj.Users;
         }
         else
         {
-            index = message.indexOf ("\"Message\": ") + 12;
+            messageElement.textContent = obj.Message;
         }
-        messageElement.textContent = message.slice (index, message.length - 3);
 
         if (messageElement.textContent.length === 0)
-        messageElement.textContent = "No active users!!!";
+            messageElement.textContent = "No active users!!!";
     }
     chatArea.appendChild (messageElement);
 }
