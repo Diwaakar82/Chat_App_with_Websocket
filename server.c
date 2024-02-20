@@ -269,7 +269,7 @@ int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *
 
     // Send the encoded message back to the client
     ssize_t bytes_sent = send (client_socket, encoded_data, encoded_size, 0);
-    printf ("$$$%s\n", payload);
+    //printf ("$$$%s\n", payload);
 
     if (bytes_sent == -1) 
     {
@@ -414,6 +414,7 @@ void* handle_client (void* arg)
         json_object_object_get_ex (parsed_data, "User", &user);
 
         int request_type = json_object_get_int (type);
+
         switch (request_type)
         {
             case 1:
@@ -481,7 +482,7 @@ void* handle_client (void* arg)
                 break;
 
             default:
-                printf ("@@@%d\n", request_type);
+                //printf ("@@@%d\n", request_type);
                 send_websocket_frame (new_client -> connfd, 1, 1, "Unkown message!!!");
                 break;
         }

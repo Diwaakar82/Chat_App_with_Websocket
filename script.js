@@ -68,7 +68,7 @@ function updateName ()
         return;
     }
 
-    const request = '{Type: 1, Message: ' + message + '}';
+    const request = '{"Type": 1, "Message": "' + message + '"}';
     console.log (request)
     socket.send (request);
     messageInput.value = "";
@@ -109,9 +109,9 @@ function appendMessage (message)
         }
         else
         {
-            index = message.indexOf ("Message: ") + 9;
+            index = message.indexOf ("\"Message\": ") + 12;
         }
-        messageElement.textContent = message.slice (index, message.length - 1);
+        messageElement.textContent = message.slice (index, message.length - 3);
 
         if (messageElement.textContent.length === 0)
         messageElement.textContent = "No active users!!!";
