@@ -37,9 +37,11 @@ function sendMessage ()
         request = '{"Type": 2, "Message": "' + message + '"}';
     }
 
+    const obj = JSON.parse (request);
+
     // Send the message to the server along with the username
     console.log (request);
-    socket.send (request);
+    socket.send (obj);
     messageInput.value = "";
 }
 
@@ -51,9 +53,10 @@ function getActiveUsers ()
         return;
     }
 
-    const request = '{"Type": 4}';
+    const request = {"Type": 4};
+
     console.log (request);
-    socket.send (request);
+    socket.send (JSON.stringify (request));
 }
 
 function updateName () 
@@ -68,9 +71,10 @@ function updateName ()
         return;
     }
 
-    const request = '{"Type": 1, "Message": "' + message + '"}';
+    const request = {"Type": 1, "Message": message};
+
     console.log (request)
-    socket.send (request);
+    socket.send (JSON.stringify (request));
     messageInput.value = "";
     
     username = message;

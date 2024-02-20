@@ -406,6 +406,8 @@ void* handle_client (void* arg)
             continue;
         } 
 
+        printf ("###%s\n", decoded_data);
+        
         struct json_object *parsed_data, *type, *message, *user, *response;
         parsed_data = json_tokener_parse (decoded_data);
 
@@ -482,7 +484,6 @@ void* handle_client (void* arg)
                 break;
 
             default:
-                //printf ("@@@%d\n", request_type);
                 send_websocket_frame (new_client -> connfd, 1, 1, "Unkown message!!!");
                 break;
         }
