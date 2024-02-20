@@ -30,11 +30,11 @@ function sendMessage ()
 
     if (index !== -1)
     {
-        request = '{Type: 3, User: ' + message.slice (0, index) + ', Message: ' + message.slice (index + 1) + '}';
+        request = '{"Type": 3, "User": "' + message.slice (0, index) + '", "Message": "' + message.slice (index + 1) + '"}';
     }
     else
     {
-        request = '{Type: 2, Message: ' + message + '}';
+        request = '{"Type": 2, "Message": "' + message + '"}';
     }
 
     // Send the message to the server along with the username
@@ -51,7 +51,7 @@ function getActiveUsers ()
         return;
     }
 
-    const request = '{Type: 4}';
+    const request = '{"Type": 4}';
     console.log (request);
     socket.send (request);
 }

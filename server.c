@@ -420,13 +420,13 @@ void* handle_client (void* arg)
             case 1:
                 strcpy (name, json_object_get_string (message));
 
+                response = json_object_new_object ();
+                json_object_object_add (response, "Type", json_object_new_int (1));
                 if (!check_name_exists (name))
                 {
                     char message [50];
                     strcpy (new_client -> name, name);
 
-                    response = json_object_new_object ();
-                    json_object_object_add (response, "Type", json_object_new_int (1));
                     json_object_object_add (response, "Status", json_object_new_int (101));
                     json_object_object_add (response, "Message", json_object_new_string ("Name updated"));
 
@@ -434,12 +434,9 @@ void* handle_client (void* arg)
                 }
                 else
                 {
-                    response = json_object_new_object ();
-                    json_object_object_add (response, "Type", json_object_new_int (1));
                     json_object_object_add (response, "Status", json_object_new_int (102));
                     json_object_object_add (response, "Message", json_object_new_string ("Name already exists"));
 
-                    // strcat (response_str, "{Type: 1, Status: 102, Message: Name already exists}");
                     send_websocket_frame (new_client -> connfd, 1, 1, json_object_to_json_string (response));
                 }
                 break;
@@ -473,12 +470,15 @@ void* handle_client (void* arg)
                 char status_code [4], msg [30], users [1000];
                 strcpy (users, extractActiveUsersString (new_client -> userid, status_code, msg));
 
-                if (users)
-                    sprintf (response_str, "{Type: 4, Status: %s, Message: %s, Users: %s}", status_code, msg, users);
-                else
-                    sprintf (response_str, "{Type: 4, Status: %s, Message: %s}", status_code, msg);
+                response = json_object_new_object ();
+                json_object_object_add (response, "Type", json_object_new_int (4));
+                json_object_object_add (response, "Status", json_object_new_string (status_code));
+                json_object_object_add (response, "Message", json_object_new_string (msg));
 
-                send_websocket_frame (new_client -> connfd, 1, 1, response_str);
+                if (users)
+                    json_object_object_add (response, "Users", json_object_new_string (users));
+
+                send_websocket_frame (new_client -> connfd, 1, 1, json_object_to_json_string (response));
                 break;
 
             default:
