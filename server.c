@@ -269,6 +269,8 @@ int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *
 
     // Send the encoded message back to the client
     ssize_t bytes_sent = send (client_socket, encoded_data, encoded_size, 0);
+    printf ("$$$%s\n", payload);
+
     if (bytes_sent == -1) 
     {
         perror ("Send failed");
@@ -386,7 +388,7 @@ void* handle_client (void* arg)
     {
         char buffer [1024];
         char *decoded_data = NULL, *end;
-        char response [1136];
+        char response_str [1136];
         char msg [100];
 
         ssize_t bytes_received = recv (connfd, buffer, sizeof (buffer), 0);
@@ -404,28 +406,43 @@ void* handle_client (void* arg)
             continue;
         } 
 
-        switch (decoded_data [7])
+        struct json_object *parsed_data, *type, *message, *user, *response;
+        parsed_data = json_tokener_parse (decoded_data);
+
+        json_object_object_get_ex (parsed_data, "Type", &type);
+        json_object_object_get_ex (parsed_data, "Message", &message);
+        json_object_object_get_ex (parsed_data, "User", &user);
+
+        int request_type = json_object_get_int (type);
+        switch (request_type)
         {
-            case '1':
-                strcpy (name, strstr (decoded_data, "Message: ") + 9);
-                name [strlen (name) - 1] = '\0';
+            case 1:
+                strcpy (name, json_object_get_string (message));
 
                 if (!check_name_exists (name))
                 {
                     char message [50];
                     strcpy (new_client -> name, name);
-                    // broadcast_message (message, connfd);
 
-                    strcat (response, "{Type: 1, Status: 101, Message: Name updated}");
-                    send_websocket_frame (new_client -> connfd, 1, 1, response);
+                    response = json_object_new_object ();
+                    json_object_object_add (response, "Type", json_object_new_int (1));
+                    json_object_object_add (response, "Status", json_object_new_int (101));
+                    json_object_object_add (response, "Message", json_object_new_string ("Name updated"));
+
+                    send_websocket_frame (new_client -> connfd, 1, 1, json_object_to_json_string (response));
                 }
                 else
                 {
-                    strcat (response, "{Type: 1, Status: 102, Message: Name already exists}");
-                    send_websocket_frame (new_client -> connfd, 1, 1, response);
+                    response = json_object_new_object ();
+                    json_object_object_add (response, "Type", json_object_new_int (1));
+                    json_object_object_add (response, "Status", json_object_new_int (102));
+                    json_object_object_add (response, "Message", json_object_new_string ("Name already exists"));
+
+                    // strcat (response_str, "{Type: 1, Status: 102, Message: Name already exists}");
+                    send_websocket_frame (new_client -> connfd, 1, 1, json_object_to_json_string (response));
                 }
                 break;
-            case '2':
+            case 2:
                 bzero (msg, sizeof (msg));
 
                 sprintf (msg, "%s: ", new_client -> name);
@@ -436,7 +453,7 @@ void* handle_client (void* arg)
                 broadcast_message (msg, connfd);
                 break;
 
-            case '3':
+            case 3:
                 char send_to [20];
                 bzero (msg, sizeof (msg));
 
@@ -451,24 +468,25 @@ void* handle_client (void* arg)
                 send_message (msg, connfd, send_to);
                 break;
 
-            case '4':
+            case 4:
                 char status_code [4], msg [30], users [1000];
                 strcpy (users, extractActiveUsersString (new_client -> userid, status_code, msg));
 
                 if (users)
-                    sprintf (response, "{Type: 4, Status: %s, Message: %s, Users: %s}", status_code, msg, users);
+                    sprintf (response_str, "{Type: 4, Status: %s, Message: %s, Users: %s}", status_code, msg, users);
                 else
-                    sprintf (response, "{Type: 4, Status: %s, Message: %s}", status_code, msg);
+                    sprintf (response_str, "{Type: 4, Status: %s, Message: %s}", status_code, msg);
 
-                send_websocket_frame (new_client -> connfd, 1, 1, response);
+                send_websocket_frame (new_client -> connfd, 1, 1, response_str);
                 break;
 
             default:
+                printf ("@@@%d\n", request_type);
                 send_websocket_frame (new_client -> connfd, 1, 1, "Unkown message!!!");
                 break;
         }
 
-        bzero (response, sizeof (response));
+        bzero (response_str, sizeof (response_str));
     }
 
     // Notify all clients about the user leaving
