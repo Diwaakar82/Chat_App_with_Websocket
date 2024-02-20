@@ -12,6 +12,7 @@
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 #include <openssl/evp.h>
+#include <json-c/json.h>
 
 #define SA struct sockaddr
 #define BACKLOG 5
