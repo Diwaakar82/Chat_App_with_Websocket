@@ -337,7 +337,7 @@ char* extractActiveUsersString (int userid, char *status_code, char *msg)
     {
         strcpy (msg, "No active users!!!");
         strcpy (status_code, "105");
-        return NULL;
+        return "";
     }
 
     char *result = (char*)malloc (length + 10);
@@ -453,6 +453,7 @@ void* handle_client (void* arg)
             case '4':
                 char status_code [4], msg [30], users [1000];
                 strcpy (users, extractActiveUsersString (new_client -> userid, status_code, msg));
+
                 if (users)
                     sprintf (response, "{Type: 4, Status: %s, Message: %s, Users: %s}", status_code, msg, users);
                 else

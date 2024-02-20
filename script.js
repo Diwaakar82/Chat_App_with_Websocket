@@ -95,7 +95,10 @@ function appendMessage (message)
     {
         username = undefined;
         const welcomeMessage = document.getElementById ("welcomeMessage");
-        welcomeMessage.innerHTML = "Welcome " + username;
+        welcomeMessage.innerHTML = "Enter valid username";
+
+        index = message.indexOf ("Message: ") + 9;
+        messageElement.textContent = message.slice (index, message.length - 1);
     }
     else
     {
