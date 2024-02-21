@@ -31,7 +31,7 @@ function sendMessage ()
 
     if (index !== -1)
     {
-        request = {"Type": 3, "User": message.slice (0, index), "Message": message.slice (index + 1)};
+        request = {"Type": 3, "User": message.slice (0, index), "Message": message.slice (index + 2)};
     }
     else
     {

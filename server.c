@@ -309,8 +309,6 @@ void send_message (struct json_object *response, int sender_connfd, char* userna
 		if (clients [i] && strstr (username, clients [i] -> name))
         {
             json_object_set_int (status, 104);
-            // status = 104;
-            printf ("$$$\n");
             connfd = clients [i] -> connfd;
             break;
         }
@@ -389,8 +387,7 @@ void* handle_client (void* arg)
     while (1) 
     {
         char buffer [1024];
-        char *decoded_data = NULL, *end;
-        char response_str [1136];
+        char *decoded_data = NULL;
         char msg [100];
 
         ssize_t bytes_received = recv (connfd, buffer, sizeof (buffer), 0);
@@ -460,7 +457,6 @@ void* handle_client (void* arg)
                 break;
 
             case 3:
-                // char send_to [20];
                 bzero (msg, sizeof (msg));
 
                 response = json_object_new_object ();
@@ -494,8 +490,6 @@ void* handle_client (void* arg)
                 send_websocket_frame (new_client -> connfd, 1, 1, "Unkown message!!!");
                 break;
         }
-
-        bzero (response_str, sizeof (response_str));
     }
 
     // Notify all clients about the user leaving
