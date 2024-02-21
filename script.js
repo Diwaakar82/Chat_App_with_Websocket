@@ -26,22 +26,21 @@ function sendMessage ()
     const messageInput = document.getElementById ("messageInput");
     const message = messageInput.value;
     const index = message.indexOf (":");
+    
     let request;
 
     if (index !== -1)
     {
-        request = '{"Type": 3, "User": "' + message.slice (0, index) + '", "Message": "' + message.slice (index + 1) + '"}';
+        request = {"Type": 3, "User": message.slice (0, index), "Message": message.slice (index + 1)};
     }
     else
     {
-        request = '{"Type": 2, "Message": "' + message + '"}';
+        request = {"Type": 2, "Message": message};
     }
-
-    const obj = JSON.parse (request);
 
     // Send the message to the server along with the username
     console.log (request);
-    socket.send (obj);
+    socket.send (JSON.stringify (request));
     messageInput.value = "";
 }
 

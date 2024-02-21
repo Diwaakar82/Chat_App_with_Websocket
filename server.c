@@ -279,52 +279,54 @@ int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *
     return 0;
 }
 
-void broadcast_message (char* message, int sender_connfd) 
+void broadcast_message (struct json_object *response, int sender_connfd) 
 {
-    char response_sender [1136], response [1136];
-    bzero (response, sizeof (response));
-    bzero (response, sizeof (response_sender));
+    struct json_object *message;
+    json_object_object_get_ex (response, "Message", &message);
 
-    //Broadcast response
-    strcat (response, "{Type: 2, Status: 104, Message: ");
-    strcat (response, message);
-    strcat (response, "}");
-
-
-    //Response to sender
-    strcpy (response_sender, "{Type: 2, Status: 104, Message: Message sent}");
     for (int i = 0; i < MAX_CLIENTS; i++)
 	{
 		if (clients [i] && clients [i] -> connfd != sender_connfd)
-		    send_websocket_frame (clients [i] -> connfd, 1, 1, response);
+		    send_websocket_frame (clients [i] -> connfd, 1, 1, json_object_to_json_string (response));
         if (clients [i] && clients [i] -> connfd == sender_connfd)
-            send_websocket_frame (clients [i] -> connfd, 1, 1, response_sender);
+        {
+            json_object_set_string (message, "Message sent.");
+            send_websocket_frame (clients [i] -> connfd, 1, 1, json_object_to_json_string (response));
+        }
 	}
 }
 
-void send_message (char* message, int sender_connfd, char* username) 
+void send_message (struct json_object *response, int sender_connfd, char* username) 
 {
-    int status = 107, connfd;
-    char response [1136];
-    
+    int connfd;
+
+    struct json_object *status, *message;
+    json_object_object_get_ex (response, "Status", &status);
+    json_object_object_get_ex (response, "Message", &message);
+
     for (int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if (clients [i] && strcmp (clients [i] -> name, username) == 0)
+		if (clients [i] && strstr (username, clients [i] -> name))
         {
-            status = 104;
+            json_object_set_int (status, 104);
+            // status = 104;
+            printf ("$$$\n");
             connfd = clients [i] -> connfd;
             break;
         }
 	}
 
-    if (status == 104)
+    if (json_object_get_int (status) == 104)
     {
-        send_websocket_frame (sender_connfd, 1, 1, "{Type: 3, Status: 104, Message: Message sent}");
-        sprintf (response, "{Type: 3, Status: 104, Message: %s}", message);
-        send_websocket_frame (connfd, 1, 1, response);
+        send_websocket_frame (connfd, 1, 1, json_object_to_json_string (response));
+        json_object_set_string (message, "Message sent");
+        send_websocket_frame (sender_connfd, 1, 1, json_object_to_json_string (response));
     }
     else
-        send_websocket_frame (sender_connfd, 1, 1, "{Type: 3, Status: 107, Message: User doesn't exist}");
+    {
+        json_object_set_string (message, "User doesn't exist");
+        send_websocket_frame (sender_connfd, 1, 1, json_object_to_json_string (response));
+    }
 }
 
 //Get list of active users
@@ -407,7 +409,7 @@ void* handle_client (void* arg)
         } 
 
         printf ("###%s\n", decoded_data);
-        
+
         struct json_object *parsed_data, *type, *message, *user, *response;
         parsed_data = json_tokener_parse (decoded_data);
 
@@ -445,27 +447,32 @@ void* handle_client (void* arg)
             case 2:
                 bzero (msg, sizeof (msg));
 
-                sprintf (msg, "%s: ", new_client -> name);
-                strcat (msg, strstr (decoded_data, "Message: ") + 9);
-                end = strchr (msg, '}');
-                *end = '\0';
+                response = json_object_new_object ();
+                json_object_object_add (response, "Type", json_object_new_int (2));
+                json_object_object_add (response, "Status", json_object_new_int (104));
 
-                broadcast_message (msg, connfd);
+                sprintf (msg, "%s: ", new_client -> name);
+                strcat (msg, json_object_get_string (message));
+
+                json_object_object_add (response, "Message", json_object_new_string (msg));
+
+                broadcast_message (response, connfd);
                 break;
 
             case 3:
-                char send_to [20];
+                // char send_to [20];
                 bzero (msg, sizeof (msg));
 
-                strcpy (send_to, strstr (decoded_data, "User: ") + 6);
-                end = strstr (send_to, "Message: ");
-                *(end - 2) = '\0';
+                response = json_object_new_object ();
+                json_object_object_add (response, "Type", json_object_new_int (3));
+                json_object_object_add (response, "Status", json_object_new_int (107));
+                // json_object_object_add (response, "User", user);
 
-                sprintf (msg, "%s: %s", new_client -> name, strstr (decoded_data, "Message: ") + 10);
-                msg [strlen (msg) - 1] = '\0';
+                sprintf (msg, "%s: %s", new_client -> name, json_object_to_json_string (message));
+                json_object_object_add (response, "Message", json_object_new_string (msg));
 
                 //send_to end
-                send_message (msg, connfd, send_to);
+                send_message (response, connfd, json_object_to_json_string (user));
                 break;
 
             case 4:
@@ -495,7 +502,7 @@ void* handle_client (void* arg)
     char message [1000];
     sprintf (message, "%s has left the chat.", new_client -> name);
     printf ("%s\n", message);
-    broadcast_message (message, connfd);
+    //broadcast_message (message, connfd);
     bzero (message, sizeof (message));
 
     // Remove the disconnected client from the list
