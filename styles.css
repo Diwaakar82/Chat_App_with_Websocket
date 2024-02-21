@@ -54,7 +54,7 @@ button:hover
     background-color: #45a049;
 }
 
-#sendMessage 
+#sendMessage, #sendName 
 {
     display: block;
     width: fit-content;
@@ -76,6 +76,15 @@ button:hover
 
 #messageInput {
     margin-top: 10px;
+    display: none;
+}
+
+#sendName {
+    display: none;
+}
+
+#sendMessage {
+    display: none;
 }
 
 #active-users 

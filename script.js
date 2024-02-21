@@ -2,8 +2,36 @@ const socket = new WebSocket ("ws://127.0.0.1:8000");
 let username = undefined;
 
 socket.addEventListener ("message", (event) => {
-    appendMessage (event.data);
+    const obj = JSON.parse (event.data);
+
+    const dropDown = document.getElementById ("getusers");
+    if (obj.Type === 4 && obj.Users !== "")
+    {
+        const users = obj.Users.split (",");
+        console.log (obj.Message);
+
+        for (let i = 0; i < users.length; i++)
+        {
+            let option = document.createElement ("option");
+            option.text = users [i];
+            option.setAttribute ("onClick", "displayMessageInput()");
+            dropDown.add (option);
+        }
+    }
+    else
+    {
+        appendMessage (event.data);
+    }
 });
+
+function displayMessageInput ()
+{
+    const messageInput = document.getElementById ("messageInput");
+    const sendButton = document.getElementById ("sendMessage");
+
+    messageInput.style.display = "block";
+    sendButton.style.display = "block";
+}
 
 function addUsername ()
 {
@@ -58,15 +86,55 @@ function getActiveUsers ()
     socket.send (JSON.stringify (request));
 }
 
+function enableSend ()
+{
+    const message = document.getElementById ("messageInput");
+    const button1 = document.getElementById ("sendName");
+    const button2 = document.getElementById ("sendMessage");
+
+    if (message.value.length > 0)
+    {
+        button1.disabled = false;
+        button2.disabled = false;
+    }
+}
+
+function displayNameInput ()
+{
+    const messageInput = document.getElementById ("messageInput");
+    const sendButton = document.getElementById ("sendName");
+    const button1 = document.getElementById ("sendName");
+    const button2 = document.getElementById ("sendMessage");
+
+    messageInput.style.display = "block";
+    sendButton.style.display = "block";
+    button1.disabled = true;
+    button2.disabled = true;
+}
+
+function hideNameInput ()
+{
+    const messageInput = document.getElementById ("messageInput");
+    const sendButton = document.getElementById ("sendName");
+
+    messageInput.style.display = "none";
+    sendButton.style.display = "none";
+}
+
 function updateName () 
 {
     const messageInput = document.getElementById ("messageInput");
     const message = messageInput.value;
 
+    const sendButton = document.getElementById ("sendName");
+    messageInput.style.display = "block";
+    sendButton.style.display = "block";
+
     if (message.length === 0) 
     {
-        appendMessage ("Invalid name");
+        appendMessage ('{"Message": "Invalid name"}');
         messageInput.value = "";
+        hideNameInput ();
         return;
     }
 
@@ -79,6 +147,8 @@ function updateName ()
     username = message;
     const welcomeMessage = document.getElementById ("welcomeMessage");
     welcomeMessage.innerHTML = "Welcome " + username;
+
+    hideNameInput ();
 }
 
 function appendMessage (message) 
@@ -90,7 +160,7 @@ function appendMessage (message)
     messageElement.textContent = message;
 
     const obj = JSON.parse (message);
-    if (username === undefined)
+    if (obj.Message !== "Invalid name" && username === undefined)
     {
         message = "Please enter your name";
         messageElement.textContent = message;
