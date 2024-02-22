@@ -470,7 +470,7 @@ void* handle_client (void* arg)
                 json_object_object_add (response, "Status", json_object_new_int (107));
                 // json_object_object_add (response, "User", user);
 
-                sprintf (msg, "%s: %s", new_client -> name, json_object_to_json_string (message));
+                sprintf (msg, "%s: %s", new_client -> name, json_object_get_string (message));
                 json_object_object_add (response, "Message", json_object_new_string (msg));
 
                 //send_to end
