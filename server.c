@@ -361,7 +361,7 @@ char* extractActiveUsersString (int userid, char *status_code, char *msg)
     strcpy (status_code, "108");
     strcpy (msg, "Fetched users!!!");
     for (int i = 0; i < MAX_CLIENTS; i++)
-        if (clients [i] && userid != clients [i] -> userid)
+        if (clients [i] && userid != clients [i] -> userid && strcmp (clients [i] -> name, "") != 0)
         	pos += snprintf (pos, length + 1, "%s, ", clients [i] -> name);
 
     if (length > 15)
@@ -468,7 +468,6 @@ void* handle_client (void* arg)
                 response = json_object_new_object ();
                 json_object_object_add (response, "Type", json_object_new_int (3));
                 json_object_object_add (response, "Status", json_object_new_int (107));
-                // json_object_object_add (response, "User", user);
 
                 sprintf (msg, "%s: %s", new_client -> name, json_object_get_string (message));
                 json_object_object_add (response, "Message", json_object_new_string (msg));
