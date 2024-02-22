@@ -282,14 +282,20 @@ int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *
 void broadcast_message (struct json_object *response, int sender_connfd) 
 {
     struct json_object *message;
+    char temp [100];
     json_object_object_get_ex (response, "Message", &message);
 
     for (int i = 0; i < MAX_CLIENTS; i++)
 	{
 		if (clients [i] && clients [i] -> connfd != sender_connfd)
+        {
+            if (strstr (json_object_get_string (message), "Message sent."))
+                json_object_set_string (message, temp);
 		    send_websocket_frame (clients [i] -> connfd, 1, 1, json_object_to_json_string (response));
+        }
         if (clients [i] && clients [i] -> connfd == sender_connfd)
         {
+            strcpy (temp, json_object_get_string (message));
             json_object_set_string (message, "Message sent.");
             send_websocket_frame (clients [i] -> connfd, 1, 1, json_object_to_json_string (response));
         }

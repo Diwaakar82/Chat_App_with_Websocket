@@ -9,13 +9,14 @@ socket.addEventListener ("message", (event) => {
     {
         const users = obj.Users.split (",");
         console.log (obj.Message);
-
+        
+        dropDown.innerHTML = '<option value="All users" onclick="displayMessageInput()">All users</option>';
         for (let i = 0; i < users.length; i++)
         {
             let option = document.createElement ("option");
             option.text = users [i];
             option.setAttribute ("onClick", "displayMessageInput()");
-            dropDown.add (option);
+            dropDown.appendChild (option);
         }
     }
     else
@@ -53,13 +54,14 @@ function sendMessage ()
 
     const messageInput = document.getElementById ("messageInput");
     const message = messageInput.value;
-    const index = message.indexOf (":");
+    const sendTo = document.getElementById ("getusers");
+    const user = sendTo.value;
     
     let request;
 
-    if (index !== -1)
+    if (user !== "All users")
     {
-        request = {"Type": 3, "User": message.slice (0, index), "Message": message.slice (index + 2)};
+        request = {"Type": 3, "User": user, "Message": message};
     }
     else
     {
@@ -70,10 +72,17 @@ function sendMessage ()
     console.log (request);
     socket.send (JSON.stringify (request));
     messageInput.value = "";
+
+    document.getElementById ("getusers").setAttribute ("onclick", "getActiveUsers()");
+    document.getElementById ("messageInput").style.display = "none";
+    document.getElementById ("sendMessage").style.display = "none";
 }
 
 function getActiveUsers () 
 {
+    const dropDown = document.getElementById ("getusers");
+    dropDown.removeAttribute ("onclick");
+
     if (username === undefined)
     {
         addUsername ();
@@ -159,6 +168,7 @@ function appendMessage (message)
     chatArea.style.display = "block";
     messageElement.textContent = message;
 
+    console.log (message);
     const obj = JSON.parse (message);
     if (obj.Message !== "Invalid name" && username === undefined)
     {
