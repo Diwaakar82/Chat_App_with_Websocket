@@ -25,7 +25,8 @@ static _Atomic int client_cnt = 0;
 
 typedef struct client_details
 {
-	int userid, connfd;
+	int userid;
+    int connfd;
 	char name [20];
 } client_t;
 
@@ -110,10 +111,10 @@ void queue_remove (int connfd)
 	{
 		if (clients [i] && clients [i] -> connfd == connfd)
 		{
-			free (clients [i]);
-            strcpy (clients [i] -> name, "");
+            strcpy (clients [i] -> name, "\0");
+            clients [i] -> userid = -1;
             clients [i] = NULL;
-            
+            // free (clients [i]);
 	        client_cnt--;
 			break;
 		}
@@ -336,20 +337,20 @@ void send_message (struct json_object *response, int sender_connfd, char* userna
 //Get list of active users
 char* extractActiveUsersString (int userid, char *status_code, char *msg) 
 {
-    int length = 15;
+    int length = 0;
 
     for (int i = 0; i < MAX_CLIENTS; i++)
-        if (clients [i] && userid != clients [i] -> userid) 
+        if (clients [i] && userid != clients [i] -> userid && clients [i] -> userid != -1) 
         	length += 20;
 
-    if (length == 15)
+    if (!length)
     {
         strcpy (msg, "No active users!!!");
         strcpy (status_code, "105");
-        return "";
+        return NULL;
     }
 
-    char *result = (char*)malloc (length + 10);
+    char *result = (char*)malloc (length);
     if (result == NULL) 
     {
         fprintf (stderr, "Memory allocation failed.\n");
@@ -485,6 +486,8 @@ void* handle_client (void* arg)
                 json_object_object_add (response, "Status", json_object_new_string (status_code));
                 json_object_object_add (response, "Message", json_object_new_string (msg));
 
+                if (users)
+                    printf ("$$$%s\n", users);
                 if (users)
                     json_object_object_add (response, "Users", json_object_new_string (users));
 
