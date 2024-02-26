@@ -8,7 +8,7 @@
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 #include <openssl/evp.h>
-#include <json/json.h>
+#include <jsoncpp/json/json.h>
 
 #define SA struct sockaddr
 #define BACKLOG 5
@@ -17,6 +17,7 @@
 #define MAGIC_STRING "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 using namespace std;
+using namespace Json;
 
 class TCPServer 
 {
@@ -326,27 +327,7 @@ class WebSocketServer
         // Copy payload after header
         memcpy (frame_buffer + header_size, payload, payload_length);
         return header_size + payload_length; // Total frame size
-    }   
-
-    // Function to send WebSocket frame to the client
-    int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *payload) 
-    {
-        // Encode the WebSocket frame
-        uint8_t encoded_data [1024];
-
-        int encoded_size = encode_websocket_frame (fin, opcode, 0, strlen (payload), (uint8_t *)payload, encoded_data);
-
-        // Send the encoded message back to the client
-        ssize_t bytes_sent = send (client_socket, encoded_data, encoded_size, 0);
-        //printf ("$$$%s\n", payload);
-
-        if (bytes_sent == -1) 
-        {
-            perror ("Send failed");
-            return -1;
-        }
-        return 0;
-    }
+    }  
 
     void calculate_websocket_accept (char *client_key, char *accept_key) 
     {
@@ -431,6 +412,26 @@ class WebSocketServer
         return client_socket;
     }
 
+    // Function to send WebSocket frame to the client
+    int send_websocket_frame (int client_socket, uint8_t fin, uint8_t opcode, char *payload) 
+    {
+        // Encode the WebSocket frame
+        uint8_t encoded_data [1024];
+
+        int encoded_size = encode_websocket_frame (fin, opcode, 0, strlen (payload), (uint8_t *)payload, encoded_data);
+
+        // Send the encoded message back to the client
+        ssize_t bytes_sent = send (client_socket, encoded_data, encoded_size, 0);
+        //printf ("$$$%s\n", payload);
+
+        if (bytes_sent == -1) 
+        {
+            perror ("Send failed");
+            return -1;
+        }
+        return 0;
+    }
+
     void sendCloseFrame (int client_socket)
     {
         uint8_t close_frame [] = {0x88, 0x00};
@@ -493,6 +494,11 @@ class client
         this -> userid = userid;
     }
     
+    void setName (char name [20])
+    {
+        strcpy (this -> name, name);
+    }
+
     int getConnfd ()
     {
         return connfd;
@@ -501,6 +507,11 @@ class client
     int getUserID ()
     {
         return userid;
+    }
+
+    char *getName ()
+    {
+        return name;
     }
 };
 
@@ -555,25 +566,27 @@ class ChatServer
         pthread_exit (NULL);
     }
 
-    void broadcast_message (struct json_object *response, int sender_connfd) 
+    void broadcast_message (Value &response, int sender_connfd) 
     {
         struct json_object *message;
         char temp [100];
-        json_object_object_get_ex (response, "Message", &message);
+        FastWriter fastwriter;
+        // json_object_object_get_ex (response, "Message", &message);
 
-        for (int i = 0; i < MAX_CLIENTS; i++)
+        for (auto i: clients)
         {
-            if (clients [i] && clients [i] -> connfd != sender_connfd)
+            if (i.first != sender_connfd)
             {
-                if (strstr (json_object_get_string (message), "Message sent."))
-                    json_object_set_string (message, temp);
-                websocket.send_websocket_frame (clients [i] -> connfd, 1, 1, json_object_to_json_string (response));
+                if (strstr (response ["Message"].asString ().c_str (), "Message sent."))
+                    response ["Message"] = "Message sent.";
+                    // json_object_set_string (message, temp);
+                websocket.send_websocket_frame (i.first, 1, 1, strdup (fastwriter.write (response).c_str ()));
             }
-            if (clients [i] && clients [i] -> connfd == sender_connfd)
+            if (i.second == sender_connfd)
             {
-                strcpy (temp, json_object_get_string (message));
-                json_object_set_string (message, "Message sent.");
-                websocket.send_websocket_frame (clients [i] -> connfd, 1, 1, json_object_to_json_string (response));
+                strcpy (temp, response ["Message"].asString ().c_str ());
+                response ["Message"] = "Message sent.";
+                websocket.send_websocket_frame (i.first, 1, 1, strdup (fastwriter.write (response).c_str ()));
             }
         }
     }
@@ -648,8 +661,8 @@ class ChatServer
 
     int check_name_exists (char *name)
     {
-        for (int i = 0; i < MAX_CLIENTS; i++)
-            if (clients [i] && !strcmp (clients [i] -> name, name))
+        for (auto i: clients)
+            if (strcmp (i.second.getName (), name) == 0)
                 return 1;
         return 0;
     }
@@ -659,6 +672,7 @@ class ChatServer
         int connfd = *((int*) arg), status;
         char name [30], *decoded_name = NULL;
 
+        client new_client = clients [connfd];
         clients_mutex.unlock ();
 
         // Receive and broadcast messages
@@ -668,8 +682,9 @@ class ChatServer
             char *decoded_data = NULL;
             char msg [100];
             int flag;
+            Value response;
 
-            if ((flag = bytes_received = websocket.recvWebSocketFrame (&decoded_data, connfd)) == -1)
+            if ((flag = websocket.recvWebSocketFrame (&decoded_data, connfd)) == -1)
             {
                 handleClose (connfd);
                 break;
@@ -689,51 +704,66 @@ class ChatServer
 
             printf ("###%s\n", decoded_data);
 
-            struct json_object *parsed_data, *type, *message, *user, *response;
-            parsed_data = json_tokener_parse (decoded_data);
+            Reader reader;
+            Value parsed_data;
+            FastWriter fastwriter;
+            // struct json_object *parsed_data, *type, *message, *user, *response;
+            reader.parse (decoded_data, parsed_data);
 
-            json_object_object_get_ex (parsed_data, "Type", &type);
-            json_object_object_get_ex (parsed_data, "Message", &message);
-            json_object_object_get_ex (parsed_data, "User", &user);
+            // json_object_object_get_ex (parsed_data, "Type", &type);
+            // json_object_object_get_ex (parsed_data, "Message", &message);
+            // json_object_object_get_ex (parsed_data, "User", &user);
 
-            int request_type = json_object_get_int (type);
+            // int request_type = json_object_get_int (type);
 
-            switch (request_type)
+            switch (parsed_data ["Type"].asInt ())
             {
                 case 1:
-                    strcpy (name, json_object_get_string (message));
+                    
+                    strcpy (name, parsed_data ["Message"].asString ().c_str ());
 
-                    response = json_object_new_object ();
-                    json_object_object_add (response, "Type", json_object_new_int (1));
+                    // json_object_object_add (response, "Type", json_object_new_int (1));
+                    response ["Type"] = 1;
+
                     if (!check_name_exists (name))
                     {
                         char message [50];
-                        strcpy (new_client -> name, name);
+                        new_client.setName (name);
 
-                        json_object_object_add (response, "Status", json_object_new_int (101));
-                        json_object_object_add (response, "Message", json_object_new_string ("Name updated"));
+                        // json_object_object_add (response, "Status", json_object_new_int (101));
+                        // json_object_object_add (response, "Message", json_object_new_string ("Name updated"));
 
-                        websocket.send_websocket_frame (new_client -> connfd, 1, 1, json_object_to_json_string (response));
+                        response ["Status"] = 101;
+                        response ["Message"] = "Name updated";
+
+                        websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
                     }
                     else
                     {
-                        json_object_object_add (response, "Status", json_object_new_int (102));
-                        json_object_object_add (response, "Message", json_object_new_string ("Name already exists"));
+                        // json_object_object_add (response, "Status", json_object_new_int (102));
+                        // json_object_object_add (response, "Message", json_object_new_string ("Name already exists"));
 
-                        websocket.send_websocket_frame (new_client -> connfd, 1, 1, json_object_to_json_string (response));
+                        response ["Status"] = 102;
+                        response ["Message"] = "Name already exists";
+
+                        websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
                     }
                     break;
                 case 2:
                     bzero (msg, sizeof (msg));
 
-                    response = json_object_new_object ();
-                    json_object_object_add (response, "Type", json_object_new_int (2));
-                    json_object_object_add (response, "Status", json_object_new_int (104));
+                    // response = json_object_new_object ();
+                    // json_object_object_add (response, "Type", json_object_new_int (2));
+                    // json_object_object_add (response, "Status", json_object_new_int (104));
 
-                    sprintf (msg, "%s: ", new_client -> name);
-                    strcat (msg, json_object_get_string (message));
+                    response ["Type"] = 2;
+                    response ["Status"] = 104;
 
-                    json_object_object_add (response, "Message", json_object_new_string (msg));
+                    sprintf (msg, "%s: ", new_client.getName ());
+                    strcat (msg, decoded_data ["Message"]);
+
+                    response ["Message"] = msg;
+                    // json_object_object_add (response, "Message", json_object_new_string (msg));
 
                     broadcast_message (response, connfd);
                     break;
@@ -741,7 +771,7 @@ class ChatServer
                 case 3:
                     bzero (msg, sizeof (msg));
 
-                    response = json_object_new_object ();
+                    // response = json_object_new_object ();
                     json_object_object_add (response, "Type", json_object_new_int (3));
                     json_object_object_add (response, "Status", json_object_new_int (107));
 
