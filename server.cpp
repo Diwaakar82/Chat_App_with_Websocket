@@ -559,7 +559,7 @@ class ChatServer
     {
         clients_mutex.lock ();
 
-        close (clients [connfd].getConnfd);
+        close (clients [connfd].getConnfd ());
         clients.erase (connfd);
     
         clients_mutex.unlock ();
@@ -582,7 +582,7 @@ class ChatServer
                     // json_object_set_string (message, temp);
                 websocket.send_websocket_frame (i.first, 1, 1, strdup (fastwriter.write (response).c_str ()));
             }
-            if (i.second == sender_connfd)
+            if (i.second.getConnfd () == sender_connfd)
             {
                 strcpy (temp, response ["Message"].asString ().c_str ());
                 response ["Message"] = "Message sent.";
@@ -591,34 +591,36 @@ class ChatServer
         }
     }
 
-    void send_message (struct json_object *response, int sender_connfd, char* username) 
+    void send_message (Value &response, int sender_connfd, const char* username) 
     {
         int connfd;
+        FastWriter fastwriter;
+        // struct json_object *status, *message;
+        // json_object_object_get_ex (response, "Status", &status);
+        // json_object_object_get_ex (response, "Message", &message);
 
-        struct json_object *status, *message;
-        json_object_object_get_ex (response, "Status", &status);
-        json_object_object_get_ex (response, "Message", &message);
-
-        for (int i = 0; i < MAX_CLIENTS; i++)
+        for (auto i: clients)
         {
-            if (clients [i] && strstr (username, clients [i] -> name))
+            if (strstr (username, i.second.getName ()))
             {
-                json_object_set_int (status, 104);
-                connfd = clients [i] -> connfd;
+                response ["Status"] = 104;
+                // json_object_set_int (status, 104);
+                connfd = i.first;
                 break;
             }
         }
 
-        if (json_object_get_int (status) == 104)
+        if (response ["Status"].asInt () == 104)
         {
-            websocket.send_websocket_frame (connfd, 1, 1, json_object_to_json_string (response));
-            json_object_set_string (message, "Message sent");
-            websocket.send_websocket_frame (sender_connfd, 1, 1, json_object_to_json_string (response));
+            websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
+            response ["Message"] = "Message sent";
+            websocket.send_websocket_frame (sender_connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
         }
         else
         {
-            json_object_set_string (message, "User doesn't exist");
-            websocket.send_websocket_frame (sender_connfd, 1, 1, json_object_to_json_string (response));
+            response ["Message"] = "User doesn't exist";
+            // json_object_set_string (message, "User doesn't exist");
+            websocket.send_websocket_frame (sender_connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
         }
     }
 
@@ -627,8 +629,8 @@ class ChatServer
     {
         int length = 0;
 
-        for (int i = 0; i < MAX_CLIENTS; i++)
-            if (clients [i] && userid != clients [i] -> userid && clients [i] -> userid != -1) 
+        for (auto i: clients)
+            if (i.first != i.second.getUserID () && i.second.getUserID () != -1) 
                 length += 20;
 
         if (!length)
@@ -649,9 +651,9 @@ class ChatServer
 
         strcpy (status_code, "108");
         strcpy (msg, "Fetched users!!!");
-        for (int i = 0; i < MAX_CLIENTS; i++)
-            if (clients [i] && userid != clients [i] -> userid && strcmp (clients [i] -> name, "") != 0)
-                pos += snprintf (pos, length + 1, "%s, ", clients [i] -> name);
+        for (auto i: clients)
+            if (i.first != i.second.getUserID () && strcmp (i.second.getName (), "") != 0)
+                pos += snprintf (pos, length + 1, "%s, ", i.second.getName ());
 
         if (length > 15)
             *(pos - 2) = '\0';
@@ -760,7 +762,7 @@ class ChatServer
                     response ["Status"] = 104;
 
                     sprintf (msg, "%s: ", new_client.getName ());
-                    strcat (msg, decoded_data ["Message"]);
+                    strcat (msg, parsed_data ["Message"].asString ().c_str ());
 
                     response ["Message"] = msg;
                     // json_object_object_add (response, "Message", json_object_new_string (msg));
@@ -772,35 +774,42 @@ class ChatServer
                     bzero (msg, sizeof (msg));
 
                     // response = json_object_new_object ();
-                    json_object_object_add (response, "Type", json_object_new_int (3));
-                    json_object_object_add (response, "Status", json_object_new_int (107));
+                    response ["Type"] = 3;
+                    response ["Status"] = 107;
+                    // json_object_object_add (response, "Type", json_object_new_int (3));
+                    // json_object_object_add (response, "Status", json_object_new_int (107));
 
-                    sprintf (msg, "%s: %s", new_client -> name, json_object_get_string (message));
-                    json_object_object_add (response, "Message", json_object_new_string (msg));
+                    sprintf (msg, "%s: %s", new_client.getName (), parsed_data ["Message"].asString ().c_str ());
+                    response ["Message"] = msg;
+                    // json_object_object_add (response, "Message", json_object_new_string (msg));
 
                     //send_to end
-                    send_message (response, connfd, json_object_to_json_string (user));
+                    send_message (response, connfd, parsed_data ["User"].asString ().c_str ());
                     break;
 
                 case 4:
                     char status_code [4], msg [30], users [1000];
-                    strcpy (users, extractActiveUsersString (new_client -> userid, status_code, msg));
+                    strcpy (users, extractActiveUsersString (new_client.getUserID (), status_code, msg));
 
-                    response = json_object_new_object ();
-                    json_object_object_add (response, "Type", json_object_new_int (4));
-                    json_object_object_add (response, "Status", json_object_new_string (status_code));
-                    json_object_object_add (response, "Message", json_object_new_string (msg));
+                    // response = json_object_new_object ();
+                    response ["Type"] = 4;
+                    response ["Status"] = status_code;
+                    response ["Message"] = msg;
+                    // json_object_object_add (response, "Type", json_object_new_int (4));
+                    // json_object_object_add (response, "Status", json_object_new_string (status_code));
+                    // json_object_object_add (response, "Message", json_object_new_string (msg));
 
                     if (users)
                         printf ("$$$%s\n", users);
                     if (users)
-                        json_object_object_add (response, "Users", json_object_new_string (users));
+                        response ["Users"] = users;
+                        // json_object_object_add (response, "Users", json_object_new_string (users));
 
-                    websocket.send_websocket_frame (new_client -> connfd, 1, 1, json_object_to_json_string (response));
+                    websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
                     break;
 
                 default:
-                    websocket.send_websocket_frame (new_client -> connfd, 1, 1, "Unkown message!!!");
+                    websocket.send_websocket_frame (connfd, 1, 1, "Unkown message!!!");
                     break;
             }
         }
