@@ -1,13 +1,19 @@
 #include <bits/stdc++.h>
-#include <netinet/in.h>
+#include <unistd.h>
+#include <string.h>
+#include <netdb.h>
+#include <string>
+#include <cstdlib>
+#include <unistd.h>
 #include <arpa/inet.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <pthread.h>
 #include <openssl/sha.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 #include <openssl/evp.h>
+#include <errno.h>
+#include <signal.h>
+#include <thread>
+#include <mutex>
 #include <jsoncpp/json/json.h>
 
 #define SA struct sockaddr
@@ -329,36 +335,40 @@ class WebSocketServer
         return header_size + payload_length; // Total frame size
     }  
 
-    void calculate_websocket_accept (char *client_key, char *accept_key) 
+    void calculate_websocket_accept(const char *clientKey, char *acceptKey) 
     {
-        char combined_key [1024];
-        strcpy (combined_key, client_key);
-        strcat (combined_key, MAGIC_STRING);
+        char combinedKey[1024] = "";
+        strcpy(combinedKey, clientKey);
+        //cout<<"clientkey:"<<clientKey<<endl;
+        strcat(combinedKey, MAGIC_STRING);
+        //cout<<"combinedkey:"<<combinedKey<<endl;
+        memset(acceptKey,'\0',50);
+        unsigned char sha1Hash[SHA_DIGEST_LENGTH];
+        SHA1(reinterpret_cast<const unsigned char*>(combinedKey), strlen(combinedKey), sha1Hash);
 
-        unsigned char sha1_hash [SHA_DIGEST_LENGTH];
-        SHA1 ((unsigned char *) combined_key, strlen (combined_key), sha1_hash);
+        BIO* b64 = BIO_new(BIO_f_base64());
+        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
 
-        // Base64 encode the SHA-1 hash
-        BIO *b64 = BIO_new (BIO_f_base64 ());
-        BIO_set_flags (b64, BIO_FLAGS_BASE64_NO_NL);
+        BIO* bio = BIO_new(BIO_s_mem());
+        BIO_push(b64, bio);
 
-        BIO *bio = BIO_new (BIO_s_mem ());
-        BIO_push (b64, bio);
+        BIO_write(b64, sha1Hash, SHA_DIGEST_LENGTH);
+        BIO_flush(b64);
 
-        BIO_write (b64, sha1_hash, SHA_DIGEST_LENGTH);
-        BIO_flush (b64);
+        BUF_MEM* bptr;
+        BIO_get_mem_ptr(b64, &bptr);
 
-        BUF_MEM *bptr;
-        BIO_get_mem_ptr (b64, &bptr);
+        strcpy(acceptKey, bptr->data);
 
-        strcpy (accept_key, bptr -> data);
+        size_t len = strlen(acceptKey);
+        
+        if (len > 0 && acceptKey[len - 1] == '\n') {
+        acceptKey[len - 1] = '\0';
+        }
+        acceptKey[28] = '\0';
+        //cout<<"acceptKey:"<<acceptKey<<endl;
 
-        // Remove trailing newline character
-        size_t len = strlen (accept_key);
-        if (len > 0 && accept_key [len - 1] == '\n')
-            accept_key [len - 1] = '\0';
-
-        BIO_free_all (b64);
+        BIO_free_all(b64);
     }
 
     void handle_websocket_upgrade (int client_socket, char *request) 
@@ -386,11 +396,11 @@ class WebSocketServer
         calculate_websocket_accept (key_start, accept_key);
 
         // Send WebSocket handshake response
-        char *upgrade_response_format =
+        char *upgrade_response_format = strdup (
             "HTTP/1.1 101 Switching Protocols\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: %s\r\n\r\n";
+            "Sec-WebSocket-Accept: %s\r\n\r\n");
 
         char response [2048];
         sprintf (response, upgrade_response_format, accept_key);
@@ -669,9 +679,9 @@ class ChatServer
         return 0;
     }
 
-    void* handle_client (void* arg) 
+    void* handle_client (int connfd) 
     {
-        int connfd = *((int*) arg), status;
+        // int connfd = *((int*) arg), status;
         char name [30], *decoded_name = NULL;
 
         client new_client = clients [connfd];
@@ -809,14 +819,14 @@ class ChatServer
                     break;
 
                 default:
-                    websocket.send_websocket_frame (connfd, 1, 1, "Unkown message!!!");
+                    websocket.send_websocket_frame (connfd, 1, 1, strdup ("Unkown message!!!"));
                     break;
             }
         }
 
         // Notify all clients about the user leaving
         char message [1000];
-        sprintf (message, "%s has left the chat.", new_client -> name);
+        sprintf (message, "%s has left the chat.", new_client.getName ());
         printf ("%s\n", message);
         //broadcast_message (message, connfd);
         bzero (message, sizeof (message));
@@ -827,7 +837,7 @@ class ChatServer
         // Close the connection
         close (connfd);
 
-        free (arg);
+        // free (arg);
         pthread_exit (NULL);
     }
 };
