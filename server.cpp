@@ -132,12 +132,12 @@ class TCPServer
     }
 
 	// receive request in the uint8_t* form from the client connected to the client_socket with the maximum length len
-    int getResponse (int client_socket, uint8_t *buff,int len)
+    int getResponse (int client_socket, uint8_t *buff, int len)
     {
         return recv (client_socket, buff, len, 0);
     }
 
-	// send request in the char* form to the client connected to the client_socket with the length len
+	// send response in the char* form to the client connected to the client_socket with the length len
     int sendRequest (int client_socket, char *buff,int len)
     {
         return send (client_socket, buff, len, 0);
@@ -421,11 +421,11 @@ class WebSocketServer
             return -1;
         }
 
-        cout << "&&&\n";
+        // cout << "&&&\n";
         int len = tcp.getResponse (client_socket, buffer, 2048);
 
         buffer [len] = '\0';
-        printf ("Header: %s\n", buffer);
+        // printf ("Header: %s\n", buffer);
 
         handle_websocket_upgrade (client_socket, buffer);
         userid++;
@@ -441,7 +441,7 @@ class WebSocketServer
         int encoded_size = encode_websocket_frame (fin, opcode, 0, strlen (payload), (uint8_t *)payload, encoded_data);
 
         // Send the encoded message back to the client
-        ssize_t bytes_sent = send (client_socket, encoded_data, encoded_size, 0);
+        ssize_t bytes_sent = tcp.sendRequest (client_socket, encoded_data, encoded_size);
         //printf ("$$$%s\n", payload);
 
         if (bytes_sent == -1) 
@@ -460,25 +460,7 @@ class WebSocketServer
         cout << "Close frame sent to the client" << endl;
     }
 
-    int sendWebsocketFrame(int client_socket, uint8_t fin, uint8_t opcode, char *payload) 
-    {
-        uint8_t encoded_data [1024];
-
-        int encoded_size = encode_websocket_frame (fin, opcode, 0, strlen(payload), ( uint8_t *)payload, encoded_data);
-
-        ssize_t bytes_sent = tcp.sendRequest (client_socket, encoded_data, encoded_size);
-    
-        if (bytes_sent == -1) 
-        {
-            perror ("Send failed");
-            return 0;
-        }
-
-        cout << "Message sent to client" << endl;
-        return 0;
-    }
-
-    int recvWebSocketFrame (char **decodedData, int client_socket)
+    int recv_websocket_frame (char **decodedData, int client_socket)
     {
         uint8_t data [2048]; 
         size_t length = 2048;
@@ -552,6 +534,7 @@ class ChatServer
             if (connfd < 0) 
                 continue;
             
+            cout << "Thread created for " << connfd << endl;
             clients_mutex.lock ();
             thread clientThread (&ChatServer::handle_client, this, connfd);
 
@@ -595,15 +578,14 @@ class ChatServer
         struct json_object *message;
         char temp [100];
         FastWriter fastwriter;
-        // json_object_object_get_ex (response, "Message", &message);
 
         for (auto i: clients)
         {
             if (i.first != sender_connfd)
             {
                 if (strstr (response ["Message"].asString ().c_str (), "Message sent."))
-                    response ["Message"] = "Message sent.";
-                    // json_object_set_string (message, temp);
+                    response ["Message"] = temp;
+
                 websocket.send_websocket_frame (i.first, 1, 1, strdup (fastwriter.write (response).c_str ()));
             }
             if (i.second.getConnfd () == sender_connfd)
@@ -619,16 +601,13 @@ class ChatServer
     {
         int connfd;
         FastWriter fastwriter;
-        // struct json_object *status, *message;
-        // json_object_object_get_ex (response, "Status", &status);
-        // json_object_object_get_ex (response, "Message", &message);
 
         for (auto i: clients)
         {
             if (strstr (username, i.second.getName ()))
             {
                 response ["Status"] = 104;
-                // json_object_set_int (status, 104);
+
                 connfd = i.first;
                 break;
             }
@@ -643,7 +622,6 @@ class ChatServer
         else
         {
             response ["Message"] = "User doesn't exist";
-            // json_object_set_string (message, "User doesn't exist");
             websocket.send_websocket_frame (sender_connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
         }
     }
@@ -654,7 +632,7 @@ class ChatServer
         int length = 0;
 
         for (auto i: clients)
-            if (i.first != i.second.getUserID () && i.second.getUserID () != -1) 
+            if (i.first != userid && userid != -1) 
                 length += 20;
 
         if (!length)
@@ -676,12 +654,12 @@ class ChatServer
         strcpy (status_code, "108");
         strcpy (msg, "Fetched users!!!");
         for (auto i: clients)
-            if (i.first != i.second.getUserID () && strcmp (i.second.getName (), "") != 0)
+            if (i.second.getUserID () != userid && strcmp (i.second.getName (), "") != 0)
                 pos += snprintf (pos, length + 1, "%s, ", i.second.getName ());
 
         if (length > 15)
             *(pos - 2) = '\0';
-    
+
         return result;
     }
 
@@ -710,7 +688,7 @@ class ChatServer
             int flag;
             Value response;
 
-            if ((flag = websocket.recvWebSocketFrame (&decoded_data, connfd)) == -1)
+            if ((flag = websocket.recv_websocket_frame (&decoded_data, connfd)) == -1)
             {
                 handleClose (connfd);
                 break;
@@ -733,14 +711,8 @@ class ChatServer
             Reader reader;
             Value parsed_data;
             FastWriter fastwriter;
-            // struct json_object *parsed_data, *type, *message, *user, *response;
+
             reader.parse (decoded_data, parsed_data);
-
-            // json_object_object_get_ex (parsed_data, "Type", &type);
-            // json_object_object_get_ex (parsed_data, "Message", &message);
-            // json_object_object_get_ex (parsed_data, "User", &user);
-
-            // int request_type = json_object_get_int (type);
 
             switch (parsed_data ["Type"].asInt ())
             {
@@ -748,39 +720,30 @@ class ChatServer
                     
                     strcpy (name, parsed_data ["Message"].asString ().c_str ());
 
-                    // json_object_object_add (response, "Type", json_object_new_int (1));
                     response ["Type"] = 1;
 
+                    cout << "New name: " << name << endl;
                     if (!check_name_exists (name))
                     {
                         char message [50];
                         new_client.setName (name);
 
-                        // json_object_object_add (response, "Status", json_object_new_int (101));
-                        // json_object_object_add (response, "Message", json_object_new_string ("Name updated"));
-
                         response ["Status"] = 101;
                         response ["Message"] = "Name updated";
+                        clients [connfd].setName (name);
 
                         websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
                     }
                     else
                     {
-                        // json_object_object_add (response, "Status", json_object_new_int (102));
-                        // json_object_object_add (response, "Message", json_object_new_string ("Name already exists"));
-
                         response ["Status"] = 102;
                         response ["Message"] = "Name already exists";
-
+                        
                         websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
                     }
                     break;
                 case 2:
                     bzero (msg, sizeof (msg));
-
-                    // response = json_object_new_object ();
-                    // json_object_object_add (response, "Type", json_object_new_int (2));
-                    // json_object_object_add (response, "Status", json_object_new_int (104));
 
                     response ["Type"] = 2;
                     response ["Status"] = 104;
@@ -789,7 +752,6 @@ class ChatServer
                     strcat (msg, parsed_data ["Message"].asString ().c_str ());
 
                     response ["Message"] = msg;
-                    // json_object_object_add (response, "Message", json_object_new_string (msg));
 
                     broadcast_message (response, connfd);
                     break;
@@ -797,15 +759,11 @@ class ChatServer
                 case 3:
                     bzero (msg, sizeof (msg));
 
-                    // response = json_object_new_object ();
                     response ["Type"] = 3;
                     response ["Status"] = 107;
-                    // json_object_object_add (response, "Type", json_object_new_int (3));
-                    // json_object_object_add (response, "Status", json_object_new_int (107));
 
                     sprintf (msg, "%s: %s", new_client.getName (), parsed_data ["Message"].asString ().c_str ());
                     response ["Message"] = msg;
-                    // json_object_object_add (response, "Message", json_object_new_string (msg));
 
                     //send_to end
                     send_message (response, connfd, parsed_data ["User"].asString ().c_str ());
@@ -815,19 +773,12 @@ class ChatServer
                     char status_code [4], msg [30], users [1000];
                     strcpy (users, extractActiveUsersString (new_client.getUserID (), status_code, msg));
 
-                    // response = json_object_new_object ();
                     response ["Type"] = 4;
                     response ["Status"] = status_code;
                     response ["Message"] = msg;
-                    // json_object_object_add (response, "Type", json_object_new_int (4));
-                    // json_object_object_add (response, "Status", json_object_new_string (status_code));
-                    // json_object_object_add (response, "Message", json_object_new_string (msg));
 
                     if (users)
-                        printf ("$$$%s\n", users);
-                    if (users)
                         response ["Users"] = users;
-                        // json_object_object_add (response, "Users", json_object_new_string (users));
 
                     websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
                     break;
