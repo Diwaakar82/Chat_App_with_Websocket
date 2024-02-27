@@ -657,7 +657,6 @@ class ChatServer
 
     void* handle_client (int connfd) 
     {
-        // int connfd = *((int*) arg), status;
         char name [30], *decoded_name = NULL;
 
         client *new_client = &clients [connfd];
@@ -674,7 +673,7 @@ class ChatServer
 
             if ((flag = websocket.recv_websocket_frame (&decoded_data, connfd)) == -1)
             {
-                handleClose (connfd);
+                // handleClose (connfd);
                 break;
             }
 
@@ -686,7 +685,7 @@ class ChatServer
             if (flag == 2)
             {
                 websocket.sendCloseFrame (connfd);
-                handleClose (connfd);
+                // handleClose (connfd);
                 break;
             }
 
@@ -725,6 +724,8 @@ class ChatServer
                         response ["Status"] = 102;
                         response ["Message"] = "Name already exists";
                         
+                        new_client -> setName ("");
+                        new_client -> setUserID (-1);
                         websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
                     }
                     break;
@@ -779,19 +780,21 @@ class ChatServer
             }
         }
 
-        cout << "{{}}\n";
-        // Notify all clients about the user leaving
-        char message [1000];
-        Value response;
+        if (new_client -> getUserID () != -1)
+        {
+            // Notify all clients about the user leaving
+            char message [1000];
+            Value response;
 
-        sprintf (message, "%s has left the chat.", new_client -> getName ());
-        response ["Type"] = 5;
-        response ["Status"] = 109;
-        response ["Message"] = message;
+            sprintf (message, "%s has left the chat.", new_client -> getName ());
+            response ["Type"] = 5;
+            response ["Status"] = 109;
+            response ["Message"] = message;
 
-        printf ("%s\n", message);
-        broadcast_message (response, connfd);
-        bzero (message, sizeof (message));
+            printf ("%s\n", message);
+            broadcast_message (response, connfd);
+            bzero (message, sizeof (message));
+        }
 
         // Remove the disconnected client from the list
         handleClose (connfd);

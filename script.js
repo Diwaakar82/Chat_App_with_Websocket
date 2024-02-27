@@ -5,7 +5,7 @@ socket.addEventListener ("message", (event) => {
     const obj = JSON.parse (event.data);
 
     const dropDown = document.getElementById ("getusers");
-    if (obj.Type === 4 && obj.Users !== "")
+    if ("Users" in obj && obj.Type === 4 && obj.Users !== "")
     {
         const users = obj.Users;
         console.log (obj.Message);
