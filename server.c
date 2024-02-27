@@ -652,7 +652,7 @@ int connection_accepting (int sockfd)
 	connfd = accept (sockfd, (SA*)&their_addr, &sin_size); 
 	if (connfd == -1)
     { 
-		perror ("\naccept error\n");
+		// perror ("\naccept error\n");
 		return -1;
 	} 
 

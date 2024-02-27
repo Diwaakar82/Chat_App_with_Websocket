@@ -17,7 +17,7 @@
 #include <jsoncpp/json/json.h>
 
 #define SA struct sockaddr
-#define BACKLOG 5
+#define BACKLOG 20
 #define MAX_CLIENTS 10
 #define PORT "8000"
 #define MAGIC_STRING "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -40,7 +40,6 @@ class TCPServer
 
     int server_creation ()
     {
-        int sockfd;
         struct addrinfo hints, *servinfo, *p;
         int yes = 1;
         int rv;
@@ -114,8 +113,8 @@ class TCPServer
         sin_size = sizeof (their_addr); 
         connfd = accept (sockfd, (SA*)&their_addr, &sin_size); 
         if (connfd == -1)
-        { 
-            perror ("\naccept error\n");
+        {
+            // perror ("\naccept error\n");
             return -1;
         } 
 
@@ -154,7 +153,7 @@ class TCPServer
 class WebSocketServer
 {
     TCPServer tcp;
-    char upgrade_response_format [200] = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n";
+    // char upgrade_response_format [200] = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n";
     int userid = 1000;
 
     void generate_random_mask (uint8_t *mask) 
@@ -337,38 +336,39 @@ class WebSocketServer
 
     void calculate_websocket_accept(const char *clientKey, char *acceptKey) 
     {
-        char combinedKey[1024] = "";
+        char combinedKey [1024] = "";
         strcpy(combinedKey, clientKey);
         //cout<<"clientkey:"<<clientKey<<endl;
-        strcat(combinedKey, MAGIC_STRING);
+        strcat (combinedKey, MAGIC_STRING);
         //cout<<"combinedkey:"<<combinedKey<<endl;
-        memset(acceptKey,'\0',50);
-        unsigned char sha1Hash[SHA_DIGEST_LENGTH];
-        SHA1(reinterpret_cast<const unsigned char*>(combinedKey), strlen(combinedKey), sha1Hash);
+        memset (acceptKey, '\0', 50);
+        unsigned char sha1Hash [SHA_DIGEST_LENGTH];
+        SHA1 (reinterpret_cast <const unsigned char*>(combinedKey), strlen (combinedKey), sha1Hash);
 
-        BIO* b64 = BIO_new(BIO_f_base64());
-        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+        BIO* b64 = BIO_new (BIO_f_base64 ());
+        BIO_set_flags (b64, BIO_FLAGS_BASE64_NO_NL);
 
-        BIO* bio = BIO_new(BIO_s_mem());
-        BIO_push(b64, bio);
+        BIO* bio = BIO_new (BIO_s_mem ());
+        BIO_push (b64, bio);
 
-        BIO_write(b64, sha1Hash, SHA_DIGEST_LENGTH);
-        BIO_flush(b64);
+        BIO_write (b64, sha1Hash, SHA_DIGEST_LENGTH);
+        BIO_flush (b64);
 
         BUF_MEM* bptr;
-        BIO_get_mem_ptr(b64, &bptr);
+        BIO_get_mem_ptr (b64, &bptr);
 
-        strcpy(acceptKey, bptr->data);
+        strcpy (acceptKey, bptr -> data);
 
-        size_t len = strlen(acceptKey);
+        size_t len = strlen (acceptKey);
         
-        if (len > 0 && acceptKey[len - 1] == '\n') {
-        acceptKey[len - 1] = '\0';
+        if (len > 0 && acceptKey [len - 1] == '\n') 
+        {
+            acceptKey [len - 1] = '\0';
         }
-        acceptKey[28] = '\0';
+        acceptKey [28] = '\0';
         //cout<<"acceptKey:"<<acceptKey<<endl;
 
-        BIO_free_all(b64);
+        BIO_free_all (b64);
     }
 
     void handle_websocket_upgrade (int client_socket, char *request) 
@@ -414,9 +414,19 @@ class WebSocketServer
     {
         char buffer [2048];
         int client_socket = tcp.connection_accepting ();
+        
+
+        if (client_socket == -1)
+        {
+            return -1;
+        }
+
+        cout << "&&&\n";
         int len = tcp.getResponse (client_socket, buffer, 2048);
 
         buffer [len] = '\0';
+        printf ("Header: %s\n", buffer);
+
         handle_websocket_upgrade (client_socket, buffer);
         userid++;
         return client_socket;
@@ -553,8 +563,12 @@ class ChatServer
     {
         client new_client;
         new_client.setConnfd (websocket.webSocketCreate ());
+
+        // cout << "New client: " << new_client.getConnfd () << endl;
         if (new_client.getConnfd () < 0)
+        {
             return -1;
+        }
 
         new_client.setUserID (websocket.getUserID ());
 
