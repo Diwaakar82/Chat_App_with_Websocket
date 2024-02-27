@@ -7,7 +7,7 @@ socket.addEventListener ("message", (event) => {
     const dropDown = document.getElementById ("getusers");
     if (obj.Type === 4 && obj.Users !== "")
     {
-        const users = obj.Users.split (",");
+        const users = obj.Users;
         console.log (obj.Message);
         
         dropDown.innerHTML = '<option value="All users" onclick="displayMessageInput()">All users</option>';

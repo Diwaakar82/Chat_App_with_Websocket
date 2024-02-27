@@ -533,8 +533,7 @@ class ChatServer
             int connfd = addClient (websocket);
             if (connfd < 0) 
                 continue;
-            
-            cout << "Thread created for " << connfd << endl;
+
             clients_mutex.lock ();
             thread clientThread (&ChatServer::handle_client, this, connfd);
 
@@ -547,13 +546,12 @@ class ChatServer
         client new_client;
         new_client.setConnfd (websocket.webSocketCreate ());
 
-        // cout << "New client: " << new_client.getConnfd () << endl;
         if (new_client.getConnfd () < 0)
         {
             return -1;
         }
 
-        new_client.setUserID (websocket.getUserID ());
+        new_client.setUserID (-1);
 
         clients_mutex.lock ();
         clients [new_client.getConnfd ()] = new_client;
@@ -627,40 +625,26 @@ class ChatServer
     }
 
     //Get list of active users
-    char* extractActiveUsersString (int userid, char *status_code, char *msg) 
+    vector <string> extractActiveUsersString (int userid, char *status_code, char *msg) 
     {
-        int length = 0;
+        vector <string> users;
 
         for (auto i: clients)
-            if (i.first != userid && userid != -1) 
-                length += 20;
-
-        if (!length)
+            if (i.second.getUserID () != userid && i.second.getUserID () != -1)
+                users.push_back (i.second.getName ());
+        
+        if (users.size ())
+        {
+            strcpy (status_code, "108");
+            strcpy (msg, "Fetched users!!!");
+        }
+        else
         {
             strcpy (msg, "No active users!!!");
             strcpy (status_code, "105");
-            return NULL;
         }
 
-        char *result = (char*)malloc (length);
-        if (result == NULL) 
-        {
-            fprintf (stderr, "Memory allocation failed.\n");
-            exit (EXIT_FAILURE);
-        }
-
-        char* pos = result;
-
-        strcpy (status_code, "108");
-        strcpy (msg, "Fetched users!!!");
-        for (auto i: clients)
-            if (i.second.getUserID () != userid && strcmp (i.second.getName (), "") != 0)
-                pos += snprintf (pos, length + 1, "%s, ", i.second.getName ());
-
-        if (length > 15)
-            *(pos - 2) = '\0';
-
-        return result;
+        return users;
     }
 
     int check_name_exists (char *name)
@@ -676,7 +660,7 @@ class ChatServer
         // int connfd = *((int*) arg), status;
         char name [30], *decoded_name = NULL;
 
-        client new_client = clients [connfd];
+        client *new_client = &clients [connfd];
         clients_mutex.unlock ();
 
         // Receive and broadcast messages
@@ -708,10 +692,11 @@ class ChatServer
 
             printf ("###%s\n", decoded_data);
 
+            vector <string> users;
             Reader reader;
-            Value parsed_data;
+            Value parsed_data, usersJson;
             FastWriter fastwriter;
-
+            
             reader.parse (decoded_data, parsed_data);
 
             switch (parsed_data ["Type"].asInt ())
@@ -722,11 +707,12 @@ class ChatServer
 
                     response ["Type"] = 1;
 
-                    cout << "New name: " << name << endl;
                     if (!check_name_exists (name))
                     {
                         char message [50];
-                        new_client.setName (name);
+                        if (new_client -> getUserID () == -1)
+                            new_client -> setUserID (connfd);
+                        new_client -> setName (name);
 
                         response ["Status"] = 101;
                         response ["Message"] = "Name updated";
@@ -742,13 +728,14 @@ class ChatServer
                         websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
                     }
                     break;
+
                 case 2:
                     bzero (msg, sizeof (msg));
 
                     response ["Type"] = 2;
                     response ["Status"] = 104;
 
-                    sprintf (msg, "%s: ", new_client.getName ());
+                    sprintf (msg, "%s: ", new_client -> getName ());
                     strcat (msg, parsed_data ["Message"].asString ().c_str ());
 
                     response ["Message"] = msg;
@@ -762,7 +749,7 @@ class ChatServer
                     response ["Type"] = 3;
                     response ["Status"] = 107;
 
-                    sprintf (msg, "%s: %s", new_client.getName (), parsed_data ["Message"].asString ().c_str ());
+                    sprintf (msg, "%s: %s", new_client -> getName (), parsed_data ["Message"].asString ().c_str ());
                     response ["Message"] = msg;
 
                     //send_to end
@@ -770,15 +757,18 @@ class ChatServer
                     break;
 
                 case 4:
-                    char status_code [4], msg [30], users [1000];
-                    strcpy (users, extractActiveUsersString (new_client.getUserID (), status_code, msg));
+                    char status_code [4], msg [30];
+                    users = extractActiveUsersString (new_client -> getUserID (), status_code, msg);
+
+                    for (auto user: users)
+                        usersJson.append (user);
 
                     response ["Type"] = 4;
                     response ["Status"] = status_code;
                     response ["Message"] = msg;
 
-                    if (users)
-                        response ["Users"] = users;
+                    if (users.size ())
+                        response ["Users"] = usersJson;
 
                     websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
                     break;
@@ -789,20 +779,22 @@ class ChatServer
             }
         }
 
+        cout << "{{}}\n";
         // Notify all clients about the user leaving
         char message [1000];
-        sprintf (message, "%s has left the chat.", new_client.getName ());
+        Value response;
+
+        sprintf (message, "%s has left the chat.", new_client -> getName ());
+        response ["Type"] = 5;
+        response ["Status"] = 109;
+        response ["Message"] = message;
+
         printf ("%s\n", message);
-        //broadcast_message (message, connfd);
+        broadcast_message (response, connfd);
         bzero (message, sizeof (message));
 
         // Remove the disconnected client from the list
         handleClose (connfd);
-
-        // Close the connection
-        close (connfd);
-
-        // free (arg);
         pthread_exit (NULL);
     }
 };
