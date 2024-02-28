@@ -114,7 +114,7 @@ class TCPServer
         connfd = accept (sockfd, (SA*)&their_addr, &sin_size); 
         if (connfd == -1)
         {
-            // perror ("\naccept error\n");
+            perror ("\naccept error\n");
             return -1;
         } 
 
@@ -153,8 +153,7 @@ class TCPServer
 class WebSocketServer
 {
     TCPServer tcp;
-    // char upgrade_response_format [200] = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n";
-    int userid = 1000;
+    int userid = -1;
 
     void generate_random_mask (uint8_t *mask) 
     {
@@ -256,7 +255,7 @@ class WebSocketServer
         size_t payload_offset = header_size; 
         if (opcode == 0x9) 
         {
-            //handle_ping (data, length, connfd);
+            handle_ping (data, length, connfd);
             *decoded_data = NULL;
             return 0;
         } 
@@ -338,9 +337,8 @@ class WebSocketServer
     {
         char combinedKey [1024] = "";
         strcpy(combinedKey, clientKey);
-        //cout<<"clientkey:"<<clientKey<<endl;
         strcat (combinedKey, MAGIC_STRING);
-        //cout<<"combinedkey:"<<combinedKey<<endl;
+
         memset (acceptKey, '\0', 50);
         unsigned char sha1Hash [SHA_DIGEST_LENGTH];
         SHA1 (reinterpret_cast <const unsigned char*>(combinedKey), strlen (combinedKey), sha1Hash);
@@ -362,11 +360,9 @@ class WebSocketServer
         size_t len = strlen (acceptKey);
         
         if (len > 0 && acceptKey [len - 1] == '\n') 
-        {
             acceptKey [len - 1] = '\0';
-        }
+        
         acceptKey [28] = '\0';
-        //cout<<"acceptKey:"<<acceptKey<<endl;
 
         BIO_free_all (b64);
     }
@@ -414,21 +410,14 @@ class WebSocketServer
     {
         char buffer [2048];
         int client_socket = tcp.connection_accepting ();
-        
-
         if (client_socket == -1)
-        {
             return -1;
-        }
 
-        // cout << "&&&\n";
         int len = tcp.getResponse (client_socket, buffer, 2048);
 
         buffer [len] = '\0';
-        // printf ("Header: %s\n", buffer);
 
         handle_websocket_upgrade (client_socket, buffer);
-        userid++;
         return client_socket;
     }
 
@@ -442,7 +431,6 @@ class WebSocketServer
 
         // Send the encoded message back to the client
         ssize_t bytes_sent = tcp.sendRequest (client_socket, encoded_data, encoded_size);
-        //printf ("$$$%s\n", payload);
 
         if (bytes_sent == -1) 
         {
@@ -467,9 +455,7 @@ class WebSocketServer
         int len = 0;
     
         if ((len = tcp.getResponse (client_socket, data, length)) == -1)
-        {
-            return -1; 
-        }
+            return -1;
 
         return process_websocket_frame (data, length, decodedData, client_socket);
     }
@@ -655,12 +641,36 @@ class ChatServer
         return 0;
     }
 
+    // void update_active_list ()
+    // {   
+    //     vector <string> users;
+    //     Value response, usersJson;
+
+    //     char status_code [4], msg [30];
+    //     users = extractActiveUsersString (new_client -> getUserID (), status_code, msg);
+
+    //     for (auto user: users)
+    //         usersJson.append (user);
+
+    //     response ["Type"] = 4;
+    //     response ["Status"] = status_code;
+    //     response ["Message"] = msg;
+
+    //     if (users.size ())
+    //         response ["Users"] = usersJson;
+        
+    //     broadcast_message (response, )
+    //     websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
+    // }
+
     void* handle_client (int connfd) 
     {
         char name [30], *decoded_name = NULL;
 
         client *new_client = &clients [connfd];
         clients_mutex.unlock ();
+
+        // update_active_list ();
 
         // Receive and broadcast messages
         while (1) 
@@ -672,10 +682,7 @@ class ChatServer
             Value response;
 
             if ((flag = websocket.recv_websocket_frame (&decoded_data, connfd)) == -1)
-            {
-                // handleClose (connfd);
                 break;
-            }
 
             //Ping frame
             if (flag == 1)
@@ -689,7 +696,7 @@ class ChatServer
                 break;
             }
 
-            printf ("###%s\n", decoded_data);
+            // printf ("###%s\n", decoded_data);
 
             vector <string> users;
             Reader reader;
@@ -701,7 +708,6 @@ class ChatServer
             switch (parsed_data ["Type"].asInt ())
             {
                 case 1:
-                    
                     strcpy (name, parsed_data ["Message"].asString ().c_str ());
 
                     response ["Type"] = 1;
