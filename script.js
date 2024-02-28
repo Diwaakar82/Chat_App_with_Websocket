@@ -4,6 +4,7 @@ let username = undefined;
 socket.addEventListener ("message", (event) => {
     const obj = JSON.parse (event.data);
 
+    console.log (obj);
     const dropDown = document.getElementById ("getusers");
     if ("Users" in obj && obj.Type === 4 && obj.Users !== "")
     {
@@ -73,27 +74,27 @@ function sendMessage ()
     socket.send (JSON.stringify (request));
     messageInput.value = "";
 
-    document.getElementById ("getusers").setAttribute ("onclick", "getActiveUsers()");
+    // document.getElementById ("getusers").setAttribute ("onclick", "getActiveUsers()");
     document.getElementById ("messageInput").style.display = "none";
     document.getElementById ("sendMessage").style.display = "none";
 }
 
-function getActiveUsers () 
-{
-    const dropDown = document.getElementById ("getusers");
-    dropDown.removeAttribute ("onclick");
+// function getActiveUsers () 
+// {
+//     const dropDown = document.getElementById ("getusers");
+//     dropDown.removeAttribute ("onclick");
 
-    if (username === undefined)
-    {
-        addUsername ();
-        return;
-    }
+//     if (username === undefined)
+//     {
+//         addUsername ();
+//         return;
+//     }
 
-    const request = {"Type": 4};
+//     const request = {"Type": 4};
 
-    console.log (request);
-    socket.send (JSON.stringify (request));
-}
+//     console.log (request);
+//     socket.send (JSON.stringify (request));
+// }
 
 function enableSend ()
 {

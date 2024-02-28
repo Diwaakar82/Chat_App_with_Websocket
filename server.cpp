@@ -611,7 +611,7 @@ class ChatServer
     }
 
     //Get list of active users
-    vector <string> extractActiveUsersString (int userid, char *status_code, char *msg) 
+    vector <string> extractActiveUsers (int userid, char *status_code, char *msg) 
     {
         vector <string> users;
 
@@ -641,27 +641,46 @@ class ChatServer
         return 0;
     }
 
-    // void update_active_list ()
-    // {   
-    //     vector <string> users;
-    //     Value response, usersJson;
+    void update_active_list ()
+    {   
+        vector <string> users;
+        Value response;
+        FastWriter fastwriter;
 
-    //     char status_code [4], msg [30];
-    //     users = extractActiveUsersString (new_client -> getUserID (), status_code, msg);
+        for (auto i: clients)
+            if (i.second.getUserID () != -1)
+                users.push_back (i.second.getName ());
 
-    //     for (auto user: users)
-    //         usersJson.append (user);
+        response ["Type"] = 4;
+        if (users.size () > 1)
+        {
+            response ["Status"] = 108;
+            response ["Message"] = "Fetched users!!!";
+        }
+        else
+        {
+            response ["Status"] = 105;
+            response ["Message"] = "No active users!!!";
+        }
 
-    //     response ["Type"] = 4;
-    //     response ["Status"] = status_code;
-    //     response ["Message"] = msg;
+        for (auto clt: clients)
+        {
+            Value usersJson;
 
-    //     if (users.size ())
-    //         response ["Users"] = usersJson;
-        
-    //     broadcast_message (response, )
-    //     websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
-    // }
+            auto iterator = find (users.begin (), users.end (), clt.second.getName ());
+            if (iterator != users.end ())
+                users.erase (iterator);
+
+            for (auto user: users)
+                usersJson.append (user);
+
+            response ["Users"] = usersJson;
+
+            websocket.send_websocket_frame (clt.first, 1, 1, strdup (fastwriter.write (response).c_str ()));
+
+            users.push_back (clt.second.getName ());
+        }
+    }
 
     void* handle_client (int connfd) 
     {
@@ -669,8 +688,6 @@ class ChatServer
 
         client *new_client = &clients [connfd];
         clients_mutex.unlock ();
-
-        // update_active_list ();
 
         // Receive and broadcast messages
         while (1) 
@@ -734,6 +751,9 @@ class ChatServer
                         new_client -> setUserID (-1);
                         websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
                     }
+
+                    update_active_list ();
+
                     break;
 
                 case 2:
@@ -763,22 +783,22 @@ class ChatServer
                     send_message (response, connfd, parsed_data ["User"].asString ().c_str ());
                     break;
 
-                case 4:
-                    char status_code [4], msg [30];
-                    users = extractActiveUsersString (new_client -> getUserID (), status_code, msg);
+                // case 4:
+                //     char status_code [4], msg [30];
+                //     users = extractActiveUsers (new_client -> getUserID (), status_code, msg);
 
-                    for (auto user: users)
-                        usersJson.append (user);
+                //     for (auto user: users)
+                //         usersJson.append (user);
 
-                    response ["Type"] = 4;
-                    response ["Status"] = status_code;
-                    response ["Message"] = msg;
+                //     response ["Type"] = 4;
+                //     response ["Status"] = status_code;
+                //     response ["Message"] = msg;
 
-                    if (users.size ())
-                        response ["Users"] = usersJson;
+                //     if (users.size ())
+                //         response ["Users"] = usersJson;
 
-                    websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
-                    break;
+                //     websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
+                //     break;
 
                 default:
                     websocket.send_websocket_frame (connfd, 1, 1, strdup ("Unkown message!!!"));
@@ -800,6 +820,10 @@ class ChatServer
             printf ("%s\n", message);
             broadcast_message (response, connfd);
             bzero (message, sizeof (message));
+
+            new_client -> setUserID (-1);
+
+            update_active_list ();
         }
 
         // Remove the disconnected client from the list
