@@ -26,6 +26,13 @@ socket.addEventListener ("message", (event) => {
     }
 });
 
+socket.onclose = (event) => {
+    console.log ("closed");
+
+    document.getElementById ("chatSection").innerHTML = "<h1>Server Terminated</h1>";
+    socket.close ();
+}
+
 function displayMessageInput ()
 {
     const messageInput = document.getElementById ("messageInput");
@@ -78,23 +85,6 @@ function sendMessage ()
     document.getElementById ("messageInput").style.display = "none";
     document.getElementById ("sendMessage").style.display = "none";
 }
-
-// function getActiveUsers () 
-// {
-//     const dropDown = document.getElementById ("getusers");
-//     dropDown.removeAttribute ("onclick");
-
-//     if (username === undefined)
-//     {
-//         addUsername ();
-//         return;
-//     }
-
-//     const request = {"Type": 4};
-
-//     console.log (request);
-//     socket.send (JSON.stringify (request));
-// }
 
 function enableSend ()
 {
@@ -150,7 +140,7 @@ function updateName ()
 
     const request = {"Type": 1, "Message": message};
 
-    console.log (request)
+    console.log (request);
     socket.send (JSON.stringify (request));
     messageInput.value = "";
     
@@ -200,4 +190,12 @@ function appendMessage (message)
             messageElement.textContent = "No active users!!!";
     }
     chatArea.appendChild (messageElement);
+}
+
+function logout ()
+{
+    const request = {"Type": 5};
+
+    console.log (request);
+    socket.send (JSON.stringify (request));
 }

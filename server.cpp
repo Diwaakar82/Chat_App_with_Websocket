@@ -695,7 +695,7 @@ class ChatServer
             char buffer [1024];
             char *decoded_data = NULL;
             char msg [100];
-            int flag;
+            int flag, exit = 0;
             Value response;
 
             if ((flag = websocket.recv_websocket_frame (&decoded_data, connfd)) == -1)
@@ -732,8 +732,8 @@ class ChatServer
                     if (!check_name_exists (name))
                     {
                         char message [50];
-                        if (new_client -> getUserID () == -1)
-                            new_client -> setUserID (connfd);
+                        // if (new_client -> getUserID () == -1)
+                        new_client -> setUserID (connfd);
                         new_client -> setName (name);
 
                         response ["Status"] = 101;
@@ -747,7 +747,8 @@ class ChatServer
                         response ["Status"] = 102;
                         response ["Message"] = "Name already exists";
                         
-                        new_client -> setName ("");
+                        char *name = "\0";
+                        new_client -> setName (name);
                         new_client -> setUserID (-1);
                         websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
                     }
@@ -783,27 +784,17 @@ class ChatServer
                     send_message (response, connfd, parsed_data ["User"].asString ().c_str ());
                     break;
 
-                // case 4:
-                //     char status_code [4], msg [30];
-                //     users = extractActiveUsers (new_client -> getUserID (), status_code, msg);
-
-                //     for (auto user: users)
-                //         usersJson.append (user);
-
-                //     response ["Type"] = 4;
-                //     response ["Status"] = status_code;
-                //     response ["Message"] = msg;
-
-                //     if (users.size ())
-                //         response ["Users"] = usersJson;
-
-                //     websocket.send_websocket_frame (connfd, 1, 1, strdup (fastwriter.write (response).c_str ()));
-                //     break;
+                case 5:
+                    exit = 1;
+                    break;
 
                 default:
                     websocket.send_websocket_frame (connfd, 1, 1, strdup ("Unkown message!!!"));
                     break;
             }
+
+            if (exit)
+                break;
         }
 
         if (new_client -> getUserID () != -1)
@@ -828,7 +819,25 @@ class ChatServer
 
         // Remove the disconnected client from the list
         handleClose (connfd);
+        update_active_list ();
         pthread_exit (NULL);
+    }
+
+    ~ChatServer ()
+    {
+        cout << "hdas\n";
+        Value response;
+        FastWriter fastwriter;
+
+        response ["Type"] = 6;
+        response ["Status"] = 110;
+        response ["Message"] = "Server terminated";
+
+        for (auto i: clients)
+        {
+            websocket.send_websocket_frame (i.second.getConnfd (), 1, 1, strdup (fastwriter.write (response).c_str ()));
+            handleClose (i.second.getConnfd ());
+        }
     }
 };
 
@@ -837,5 +846,6 @@ int main ()
     ChatServer chat;
     chat.startServer ();
 
+    cout << "dhsj" << endl;
     return 0;
 }
